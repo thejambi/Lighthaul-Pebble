@@ -15,6 +15,9 @@
 #define G_ACCEL 1.032           // c/yr per felt g — honest 1g = 1.032 ly/yr^2
 #define PHI_DOCK 0.2027         // rapidity of 0.2c — hot-dock arrival speed
 #define THRIFT_SHIP_YR 0.05     // don't burn extra dv to save under ~3 weeks
+#define SHIP_MAX_G 7.0          // Courier drive's max proper thrust, in g —
+                                // rugged cargo can take more than the drive gives
+#define N_PLAN_RUNGS 9          // AUTO, 7 fixed cruise speeds, REDLINE (governor)
 
 enum { UP_TANK, UP_DRIVE, UP_DAMPER, UP_BROKER, UP_REJUV, UP_OVERDRIVE, UP_AUTOPILOT, N_UPGRADES };
 
@@ -38,6 +41,8 @@ typedef struct {
   bool deep_license;
   int8_t dock_event;            // index into DOCK_EVENTS, -1 = none
   float max_gamma;
+  uint8_t plan_rung;            // sticky speed-ladder pick (0 = AUTO); appended
+                                // last so old saves load with it zeroed
 } Game;
 
 extern Game g;
@@ -86,7 +91,9 @@ float load_factor(void);                   // felt-load multiplier (dampers)
 double cap_beta(void);
 int32_t contract_pay(const Contract *c);   // base pay × broker × reputation
 
-RunPlan game_plan(const Contract *c);
+RunPlan game_plan(const Contract *c);              // plan at the sticky rung
+RunPlan game_plan_rung(const Contract *c, int rung);
+const char *plan_rung_label(int rung);             // "AUTO".."0.999999c","REDLINE"
 void game_resolve(const Contract *c);      // apply plan, move dock, reroll offers
 
 // fuel & shop

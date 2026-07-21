@@ -101,7 +101,7 @@ static void win_load(Window *w) {
     .select_click = select_row,
   });
   menu_layer_set_normal_colors(s_menu, GColorBlack, GColorWhite);
-  menu_layer_set_highlight_colors(s_menu, GColorChromeYellow, GColorBlack);
+  menu_layer_set_highlight_colors(s_menu, PBL_IF_COLOR_ELSE(GColorChromeYellow, GColorWhite), GColorBlack);
   menu_layer_set_click_config_onto_window(s_menu, w);
   layer_add_child(root, menu_layer_get_layer(s_menu));
 }

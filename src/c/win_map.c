@@ -3,8 +3,8 @@
 // Docked star map: top-down cluster chart. Up/Down cycles the three contract
 // offers (gold route) plus a FUEL & OUTFITTING slot; Select opens it.
 
-#define TOP_H 38
-#define BOT_H 62
+// bar heights are computed per-screen in draw(): rect 200x228 gets the roomy
+// layout, 144x168 a compact one, round screens extra top/bottom clearance
 
 static Window *s_win;
 static Layer *s_layer;
@@ -39,26 +39,31 @@ static void draw(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
-  GRect map_area = GRect(0, TOP_H, b.size.w, b.size.h - TOP_H - BOT_H);
+  bool round = IS_ROUND, compact = IS_COMPACT(b);
+  int top_h = round ? (compact ? 46 : 56) : (compact ? 34 : 38);
+  int bot_h = round ? (compact ? 58 : 66) : (compact ? 54 : 62);
+  int inset = round ? 24 : 0;
+  GRect map_area = GRect(inset, top_h, b.size.w - 2 * inset, b.size.h - top_h - bot_h);
   float minx, maxx, minz, maxz;
   project_bounds(&minx, &maxx, &minz, &maxz);
 
   char buf[96], t1[16], t2[16], t3[16];
 
   // --- top bar: station name + pilot vitals
-  graphics_context_set_text_color(ctx, GColorChromeYellow);
+  graphics_context_set_text_color(ctx, COL_GOLD);
   graphics_draw_text(ctx, g_stations[g.station].name,
                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                     GRect(4, -3, b.size.w - 8, 20), GTextOverflowModeTrailingEllipsis,
-                     GTextAlignmentCenter, NULL);
+                     GRect(round ? 30 : 4, round ? (compact ? 4 : 16) : -3, b.size.w - (round ? 60 : 8), 20),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   fmt1(t1, sizeof t1, g.fuel);
   fmt1(t2, sizeof t2, tank_cap());
   fmt1(t3, sizeof t3, g.pilot_age);
-  snprintf(buf, sizeof buf, "$%ld   dv %s/%s   age %s", (long)g.credits, t1, t2, t3);
-  graphics_context_set_text_color(ctx, GColorLightGray);
+  if (compact) snprintf(buf, sizeof buf, "$%ld  dv %s  a %s", (long)g.credits, t1, t3);
+  else snprintf(buf, sizeof buf, "$%ld   dv %s/%s   age %s", (long)g.credits, t1, t2, t3);
+  graphics_context_set_text_color(ctx, COL_DIM);
   graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(0, 17, b.size.w, 16), GTextOverflowModeTrailingEllipsis,
-                     GTextAlignmentCenter, NULL);
+                     GRect(0, round ? (compact ? 24 : 36) : (compact ? 15 : 17), b.size.w, 16),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // --- selected route (under the dots)
   GPoint here = project(g_stations[g.station].x, g_stations[g.station].z,
@@ -66,7 +71,7 @@ static void draw(Layer *layer, GContext *ctx) {
   if (s_sel < 3) {
     Station *t = &g_stations[g_offers[s_sel].to];
     GPoint dst = project(t->x, t->z, map_area, minx, maxx, minz, maxz);
-    graphics_context_set_stroke_color(ctx, GColorChromeYellow);
+    graphics_context_set_stroke_color(ctx, COL_GOLD);
     graphics_context_set_stroke_width(ctx, 2);
     graphics_draw_line(ctx, here, dst);
   }
@@ -80,19 +85,19 @@ static void draw(Layer *layer, GContext *ctx) {
     bool is_offer = false;
     for (int o = 0; o < 3; o++) if (g_offers[o].to == i) is_offer = true;
     if (i == (int)g.station) {
-      graphics_context_set_fill_color(ctx, GColorChromeYellow);
+      graphics_context_set_fill_color(ctx, COL_GOLD);
       graphics_fill_circle(ctx, p, 3);
-      graphics_context_set_stroke_color(ctx, GColorChromeYellow);
+      graphics_context_set_stroke_color(ctx, COL_GOLD);
       graphics_context_set_stroke_width(ctx, 1);
       graphics_draw_circle(ctx, p, 6);
     } else if (is_target) {
-      graphics_context_set_fill_color(ctx, GColorCyan);
+      graphics_context_set_fill_color(ctx, COL_CYAN);
       graphics_fill_circle(ctx, p, 4);
     } else if (is_offer) {
-      graphics_context_set_fill_color(ctx, GColorPictonBlue);
+      graphics_context_set_fill_color(ctx, COL_BLUE);
       graphics_fill_circle(ctx, p, 3);
     } else {
-      graphics_context_set_fill_color(ctx, s->deep ? GColorDarkGray : GColorWhite);
+      graphics_context_set_fill_color(ctx, s->deep ? COL_FAINT : GColorWhite);
       graphics_fill_circle(ctx, p, 2);
     }
     // label the selected target so the route reads at a glance
@@ -101,7 +106,7 @@ static void draw(Layer *layer, GContext *ctx) {
       station_short_name(i, nm, sizeof nm);
       int lx = p.x < b.size.w / 2 ? p.x + 6 : p.x - 66;
       int ly = p.y < map_area.origin.y + 14 ? p.y + 4 : p.y - 16;
-      graphics_context_set_text_color(ctx, GColorCyan);
+      graphics_context_set_text_color(ctx, COL_CYAN);
       graphics_draw_text(ctx, nm, fonts_get_system_font(FONT_KEY_GOTHIC_14),
                          GRect(lx, ly, 62, 16), GTextOverflowModeTrailingEllipsis,
                          p.x < b.size.w / 2 ? GTextAlignmentLeft : GTextAlignmentRight, NULL);
@@ -109,10 +114,14 @@ static void draw(Layer *layer, GContext *ctx) {
   }
 
   // --- bottom panel
-  int y = b.size.h - BOT_H;
-  graphics_context_set_stroke_color(ctx, GColorDarkGray);
+  int y = b.size.h - bot_h;
+  int px = round ? (compact ? 22 : 30) : 4;
+  int pw = b.size.w - 2 * px;
+  GTextAlignment align = round ? GTextAlignmentCenter : GTextAlignmentLeft;
+  int l2 = y + (compact ? 15 : 17), l3 = y + (compact ? 29 : 33);
+  graphics_context_set_stroke_color(ctx, COL_FAINT);
   graphics_context_set_stroke_width(ctx, 1);
-  graphics_draw_line(ctx, GPoint(0, y), GPoint(b.size.w, y));
+  graphics_draw_line(ctx, GPoint(inset, y), GPoint(b.size.w - inset, y));
 
   if (s_sel < 3) {
     Contract *c = &g_offers[s_sel];
@@ -122,34 +131,38 @@ static void draw(Layer *layer, GContext *ctx) {
              c->type == 0 ? "CARGO" : "PAX", nm);
     graphics_context_set_text_color(ctx, GColorWhite);
     graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                       GRect(4, y - 2, b.size.w - 8, 20), GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentLeft, NULL);
-    graphics_context_set_text_color(ctx, GColorLightGray);
+                       GRect(px, y - 2, pw, 20), GTextOverflowModeTrailingEllipsis, align, NULL);
+    graphics_context_set_text_color(ctx, COL_DIM);
     graphics_draw_text(ctx, c->what, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                       GRect(4, y + 17, b.size.w - 8, 16), GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentLeft, NULL);
+                       GRect(px, l2, pw, 16), GTextOverflowModeTrailingEllipsis, align, NULL);
     RunPlan p = game_plan(c);
     bool ok = p.deadline_ok && p.aging_ok && p.retire_ok;
-    fmt_years(t1, sizeof t1, c->deadline);
-    snprintf(buf, sizeof buf, "$%ld  %dg  %dly  DL %s %s",
-             (long)contract_pay(c), c->g_limit, (int)(c->d + 0.5f), t1,
-             ok ? "OK" : "!!");
-    graphics_context_set_text_color(ctx, ok ? GColorGreen : GColorRed);
+    if (round)   // the circle bottom is narrow — deadline detail lives on the card
+      snprintf(buf, sizeof buf, "$%ld  %dg  %dly  %s",
+               (long)contract_pay(c), c->g_limit, (int)(c->d + 0.5f), ok ? "OK" : "!!");
+    else if (compact)
+      snprintf(buf, sizeof buf, "$%ld %dg %dly DL%d %s",
+               (long)contract_pay(c), c->g_limit, (int)(c->d + 0.5f),
+               (int)(c->deadline + 0.5f), ok ? "OK" : "!!");
+    else {
+      fmt_years(t1, sizeof t1, c->deadline);
+      snprintf(buf, sizeof buf, "$%ld  %dg  %dly  DL %s %s",
+               (long)contract_pay(c), c->g_limit, (int)(c->d + 0.5f), t1,
+               ok ? "OK" : "!!");
+    }
+    graphics_context_set_text_color(ctx, ok ? COL_GOOD : COL_BAD);
     graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                       GRect(4, y + 33, b.size.w - 8, 16), GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentLeft, NULL);
+                       GRect(px, l3, pw, 16), GTextOverflowModeTrailingEllipsis, align, NULL);
   } else {
     graphics_context_set_text_color(ctx, GColorWhite);
     graphics_draw_text(ctx, "FUEL & OUTFITTING",
                        fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                       GRect(4, y - 2, b.size.w - 8, 20), GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentLeft, NULL);
+                       GRect(px, y - 2, pw, 20), GTextOverflowModeTrailingEllipsis, align, NULL);
     const char *ev = g.dock_event >= 0 ? DOCK_EVENTS[g.dock_event].txt
                                        : "Steady trade at this dock.";
-    graphics_context_set_text_color(ctx, g.dock_event >= 0 ? GColorChromeYellow : GColorLightGray);
+    graphics_context_set_text_color(ctx, g.dock_event >= 0 ? COL_GOLD : COL_DIM);
     graphics_draw_text(ctx, ev, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                       GRect(4, y + 17, b.size.w - 8, 32), GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentLeft, NULL);
+                       GRect(px, l2, pw, 32), GTextOverflowModeWordWrap, align, NULL);
   }
 }
 

@@ -15,47 +15,69 @@ static void draw(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
+  bool round = IS_ROUND, compact = IS_COMPACT(b);
   char buf[64], t1[16];
 
-  graphics_context_set_text_color(ctx, GColorChromeYellow);
-  graphics_draw_text(ctx, "LIGHTHAUL", fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
-                     GRect(0, 2, b.size.w, 30), GTextOverflowModeTrailingEllipsis,
+  graphics_context_set_text_color(ctx, COL_GOLD);
+  graphics_draw_text(ctx, "LIGHTHAUL",
+                     fonts_get_system_font(compact ? FONT_KEY_GOTHIC_24_BOLD : FONT_KEY_GOTHIC_28_BOLD),
+                     GRect(0, round ? (compact ? 10 : 18) : 2, b.size.w, 30), GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentCenter, NULL);
-  graphics_context_set_text_color(ctx, GColorLightGray);
-  graphics_draw_text(ctx, "a relativistic courier game",
-                     fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(0, 32, b.size.w, 16), GTextOverflowModeTrailingEllipsis,
-                     GTextAlignmentCenter, NULL);
+  if (!compact) {
+    graphics_context_set_text_color(ctx, COL_DIM);
+    graphics_draw_text(ctx, "a relativistic courier game",
+                       fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                       GRect(0, round ? 48 : 32, b.size.w, 16), GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter, NULL);
+  }
 
-  int y = 58;
+  int row_h = compact ? 24 : 30;
+  int bx = round ? 32 : 10;
+  int y = round ? (compact ? 42 : 74) : (compact ? 34 : 58);
   for (int i = 0; i < N_ROWS; i++) {
     const char *label = ROWS[i];
     if (s_confirm == i) label = "SURE? SELECT = YES";
     if (i == s_sel) {
-      graphics_context_set_fill_color(ctx, s_confirm == i ? GColorRed : GColorChromeYellow);
-      graphics_fill_rect(ctx, GRect(10, y, b.size.w - 20, 26), 3, GCornersAll);
+      graphics_context_set_fill_color(ctx, s_confirm == i ? COL_BAD : COL_GOLD);
+      graphics_fill_rect(ctx, GRect(bx, y, b.size.w - 2 * bx, row_h - 4), 3, GCornersAll);
       graphics_context_set_text_color(ctx, GColorBlack);
     } else {
       graphics_context_set_text_color(ctx, GColorWhite);
     }
     graphics_draw_text(ctx, label, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                       GRect(10, y, b.size.w - 20, 24), GTextOverflowModeTrailingEllipsis,
+                       GRect(bx, y - 3, b.size.w - 2 * bx, 24), GTextOverflowModeTrailingEllipsis,
                        GTextAlignmentCenter, NULL);
-    y += 30;
+    y += row_h;
   }
 
-  y = b.size.h - 46;
+  if (round) {
+    // one line fits the circle bottom: records once you have them, else the seed
+    if (g_rec.careers > 0)
+      snprintf(buf, sizeof buf, "BEST $%ld  %d runs", (long)g_rec.best_balance, g_rec.best_deliveries);
+    else
+      snprintf(buf, sizeof buf, "seed %s", g.seed);
+    graphics_context_set_text_color(ctx, g_rec.careers > 0 ? COL_CYAN : COL_FAINT);
+    graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
+                       GRect(0, b.size.h - (compact ? 36 : 48), b.size.w, 16), GTextOverflowModeTrailingEllipsis,
+                       GTextAlignmentCenter, NULL);
+    return;
+  }
+  y = b.size.h - (compact ? 30 : 46);
   if (g_rec.careers > 0) {
-    fmt_gamma(t1, sizeof t1, g_rec.best_gamma);
-    snprintf(buf, sizeof buf, "BEST $%ld  %d runs  gamma %s",
-             (long)g_rec.best_balance, g_rec.best_deliveries, t1);
-    graphics_context_set_text_color(ctx, GColorCyan);
+    if (compact)
+      snprintf(buf, sizeof buf, "BEST $%ld  %d runs", (long)g_rec.best_balance, g_rec.best_deliveries);
+    else {
+      fmt_gamma(t1, sizeof t1, g_rec.best_gamma);
+      snprintf(buf, sizeof buf, "BEST $%ld  %d runs  gamma %s",
+               (long)g_rec.best_balance, g_rec.best_deliveries, t1);
+    }
+    graphics_context_set_text_color(ctx, COL_CYAN);
     graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
                        GRect(0, y, b.size.w, 16), GTextOverflowModeTrailingEllipsis,
                        GTextAlignmentCenter, NULL);
   }
   snprintf(buf, sizeof buf, "map seed: %s", g.seed);
-  graphics_context_set_text_color(ctx, GColorDarkGray);
+  graphics_context_set_text_color(ctx, COL_FAINT);
   graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
                      GRect(0, y + 16, b.size.w, 16), GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentCenter, NULL);

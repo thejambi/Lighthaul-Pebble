@@ -5,12 +5,13 @@
 static Window *s_win;
 static Layer *s_layer;
 static int s_page;                 // 0 = delivery result, 1 = career over
+static int s_x0, s_w;              // text column, set per-screen in draw()
 
 static void line(GContext *ctx, GRect b, int *y, const char *txt,
                  GColor color, const char *font_key, int h) {
   graphics_context_set_text_color(ctx, color);
   graphics_draw_text(ctx, txt, fonts_get_system_font(font_key),
-                     GRect(6, *y, b.size.w - 12, h + 6),
+                     GRect(s_x0, *y, s_w, h + 6),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   *y += h;
 }
@@ -19,73 +20,79 @@ static void draw(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
+  bool round = IS_ROUND, compact = IS_COMPACT(b);
+  s_x0 = round ? (compact ? 28 : 34) : 6;
+  s_w = b.size.w - 2 * s_x0;
+  int lh = compact ? 14 : 16;
+  int hint_y = b.size.h - (round ? 34 : 18);
   char buf[96], t1[20], t2[20];
-  int y = -2;
+  int y = round ? (compact ? 12 : 26) : -2;
 
   if (s_page == 1) {
-    line(ctx, b, &y, "CAREER OVER", GColorRed, FONT_KEY_GOTHIC_28_BOLD, 30);
+    line(ctx, b, &y, "CAREER OVER", COL_BAD, FONT_KEY_GOTHIC_28_BOLD, compact ? 26 : 30);
     fmt1(t1, sizeof t1, g.pilot_age);
     snprintf(buf, sizeof buf, "Retired at %s, flying the Courier.", t1);
-    line(ctx, b, &y, buf, GColorLightGray, FONT_KEY_GOTHIC_14, 20);
+    line(ctx, b, &y, buf, COL_DIM, FONT_KEY_GOTHIC_14, compact ? 16 : 20);
     snprintf(buf, sizeof buf, "FINAL BALANCE $%ld%s", (long)g.credits,
              g_last.rec_balance ? " *BEST*" : "");
-    line(ctx, b, &y, buf, GColorChromeYellow, FONT_KEY_GOTHIC_18_BOLD, 22);
+    line(ctx, b, &y, buf, COL_GOLD, FONT_KEY_GOTHIC_18_BOLD, compact ? 20 : 22);
     snprintf(buf, sizeof buf, "RANK: %s", rank_for(g.credits));
-    line(ctx, b, &y, buf, GColorChromeYellow, FONT_KEY_GOTHIC_18_BOLD, 24);
+    line(ctx, b, &y, buf, COL_GOLD, FONT_KEY_GOTHIC_18_BOLD, compact ? 20 : 24);
     snprintf(buf, sizeof buf, "%d delivered, %d failed%s", g.deliveries, g.failures,
              g_last.rec_deliveries ? " *BEST*" : "");
-    line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, 16);
+    line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, lh);
     fmt_years(t1, sizeof t1, g.uni_time);
     snprintf(buf, sizeof buf, "%s passed in the universe", t1);
-    line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, 16);
+    line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, lh);
     fmt_gamma(t1, sizeof t1, g.max_gamma);
     snprintf(buf, sizeof buf, "highest gamma: %s%s", t1,
              g_last.rec_gamma ? " *BEST*" : "");
-    line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, 16);
+    line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, lh);
     snprintf(buf, sizeof buf, "seed: %s", g.seed);
-    line(ctx, b, &y, buf, GColorDarkGray, FONT_KEY_GOTHIC_14, 16);
-    graphics_context_set_text_color(ctx, GColorChromeYellow);
+    line(ctx, b, &y, buf, COL_FAINT, FONT_KEY_GOTHIC_14, lh);
+    graphics_context_set_text_color(ctx, COL_GOLD);
     graphics_draw_text(ctx, "SELECT: NEW CAREER",
                        fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                       GRect(0, b.size.h - 18, b.size.w, 16),
+                       GRect(0, hint_y, b.size.w, 16),
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     return;
   }
 
   line(ctx, b, &y, g_last.ok ? "DELIVERED" : "CONTRACT FAILED",
-       g_last.ok ? GColorGreen : GColorRed, FONT_KEY_GOTHIC_28_BOLD, 30);
-  line(ctx, b, &y, g_last.what, GColorLightGray, FONT_KEY_GOTHIC_14, 16);
+       g_last.ok ? COL_GOOD : COL_BAD, FONT_KEY_GOTHIC_28_BOLD, compact ? 26 : 30);
+  line(ctx, b, &y, g_last.what, COL_DIM, FONT_KEY_GOTHIC_14, lh);
   snprintf(buf, sizeof buf, "to %s", g_last.to_name);
-  line(ctx, b, &y, buf, GColorLightGray, FONT_KEY_GOTHIC_14, 18);
+  line(ctx, b, &y, buf, COL_DIM, FONT_KEY_GOTHIC_14, lh + 2);
 
   snprintf(buf, sizeof buf, "PAID $%ld", (long)g_last.pay);
-  line(ctx, b, &y, buf, GColorChromeYellow, FONT_KEY_GOTHIC_24_BOLD, 26);
+  line(ctx, b, &y, buf, COL_GOLD, FONT_KEY_GOTHIC_24_BOLD, compact ? 24 : 26);
   if (g_last.late)
-    line(ctx, b, &y, "LATE - pay docked 75%", GColorRed, FONT_KEY_GOTHIC_14, 16);
+    line(ctx, b, &y, "LATE - pay docked 75%", COL_BAD, FONT_KEY_GOTHIC_14, lh);
   if (g_last.aged_out)
-    line(ctx, b, &y, "PAX aged past cap - pay docked 80%", GColorRed, FONT_KEY_GOTHIC_14, 16);
+    line(ctx, b, &y, "PAX aged past cap - pay docked 80%", COL_BAD, FONT_KEY_GOTHIC_14, lh);
 
   fmt_years(t1, sizeof t1, g_last.t_uni);
   fmt_years(t2, sizeof t2, g_last.t_ship);
-  snprintf(buf, sizeof buf, "universe %s   ship %s", t1, t2);
-  line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, 16);
+  if (compact) snprintf(buf, sizeof buf, "uni %s  ship %s", t1, t2);
+  else snprintf(buf, sizeof buf, "universe %s   ship %s", t1, t2);
+  line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, lh);
   fmt1(t1, sizeof t1, g.pilot_age);
   snprintf(buf, sizeof buf, "you are now %s   $%ld", t1, (long)g.credits);
-  line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, 18);
+  line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, lh + 2);
 
   if (g_last.licensed)
-    line(ctx, b, &y, "DEEP SPACE LICENSE EARNED", GColorCyan, FONT_KEY_GOTHIC_14, 16);
+    line(ctx, b, &y, "DEEP SPACE LICENSE EARNED", COL_CYAN, FONT_KEY_GOTHIC_14, lh);
   if (g_last.vignette[0]) {
-    graphics_context_set_text_color(ctx, GColorCyan);
+    graphics_context_set_text_color(ctx, COL_CYAN);
     graphics_draw_text(ctx, g_last.vignette, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                       GRect(6, y, b.size.w - 12, 52), GTextOverflowModeWordWrap,
+                       GRect(s_x0, y, s_w, 52), GTextOverflowModeWordWrap,
                        GTextAlignmentLeft, NULL);
   }
 
-  graphics_context_set_text_color(ctx, GColorChromeYellow);
+  graphics_context_set_text_color(ctx, COL_GOLD);
   graphics_draw_text(ctx, "SELECT: CONTINUE",
                      fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(0, b.size.h - 18, b.size.w, 16),
+                     GRect(0, hint_y, b.size.w, 16),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 }
 

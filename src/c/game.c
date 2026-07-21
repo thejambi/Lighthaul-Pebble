@@ -52,7 +52,12 @@ static bool eval_profile(double phi, double a, double phi_end, double d, Prof *o
   double ee = lh_exp(phi_end);
   double she = 0.5 * (ee - 1.0 / ee), che = 0.5 * (ee + 1.0 / ee);
   double dc = d - (ch - 1.0) / a - (ch - che) / a;   // cruise distance
-  if (dc < 0) return false;                          // can't even finish ramping
+  if (dc < 0) {
+    // hairline negatives are rounding at the geometry bound (φ came from
+    // arcosh of this very equation) — that's the triangular profile, dc = 0
+    if (dc < -1e-6 * (d + 1.0)) return false;        // genuinely too short
+    dc = 0;
+  }
   o->ramp_ship = (2.0 * phi - phi_end) / a;
   o->t_ship = o->ramp_ship + dc / sh;
   o->t_uni = (2.0 * sh - she) / a + dc * ch / sh;
@@ -65,10 +70,43 @@ static bool prof_ok(const Contract *c, const Prof *pr) {
       && g.pilot_age + pr->t_ship < retire_age();
 }
 
-RunPlan game_plan(const Contract *c) {
+// The fastest cruise rapidity the leg's geometry allows (cruise length ≥ 0):
+// cosh(φ) ≤ (d·a + 1 + cosh(φ_end)) / 2. At the bound the cruise vanishes —
+// the honest accelerate-to-midpoint, flip, brake profile.
+static double phi_geometry_max(double d, double a, double phi_end) {
+  double ee = lh_exp(phi_end);
+  double m = (d * a + 1.0 + 0.5 * (ee + 1.0 / ee)) / 2.0;
+  if (m < 1.0) m = 1.0;
+  return lh_ln(m + lh_sqrt(m * m - 1.0));   // arcosh
+}
+
+// The speed ladder: fixed cruise rungs the player cycles on the contract card.
+// Rung 0 is AUTO (optimizer), rungs 1..7 fixed speeds, the last is REDLINE —
+// whatever the governor allows, so Redline Coils raise that rung's γ.
+static const double RUNG_PHI[N_PLAN_RUNGS - 2] = {
+  0.549306,   // 0.5c
+  1.472219,   // 0.9c
+  2.646652,   // 0.99c
+  3.800201,   // 0.999c
+  4.951719,   // 0.9999c
+  6.103034,   // 0.99999c
+  7.254329,   // 0.999999c
+};
+
+const char *plan_rung_label(int rung) {
+  static const char *L[N_PLAN_RUNGS] = { "AUTO", "0.5c", "0.9c", "0.99c",
+    "0.999c", "0.9999c", "0.99999c", "0.999999c", "MAX" };
+  return L[rung < 0 || rung >= N_PLAN_RUNGS ? 0 : rung];
+}
+
+RunPlan game_plan_rung(const Contract *c, int rung) {
   RunPlan p;
   memset(&p, 0, sizeof p);
-  double a = (double)c->g_limit / load_factor() * G_ACCEL;
+  // burn/brake acceleration: the cargo's rating through the dampers, but never
+  // more than the drive itself can thrust
+  double a_g = (double)c->g_limit / load_factor();
+  if (a_g > SHIP_MAX_G) a_g = SHIP_MAX_G;
+  double a = a_g * G_ACCEL;
   double ff = fuel_factor();
   double phi_end = g.upgrades[UP_AUTOPILOT] ? PHI_DOCK : 0.0;
   double phi_hi = (g.fuel / ff + phi_end) * 0.5;      // Δv = (2φ−φ_end)·ff ≤ fuel
@@ -76,35 +114,52 @@ RunPlan game_plan(const Contract *c) {
   if (phi_hi > phi_cap) phi_hi = phi_cap;
   if (phi_hi < phi_end + 0.01) { phi_hi = phi_end + 0.01; phi_end = 0.0; }  // dry tank: crawl
 
-  // pass 1: the feasible plan with the least pilot aging (and the fastest
-  // arrival as a best-effort fallback when nothing is feasible)
-  const int N = 120;
   Prof pr;
-  double best_ship = 1e18, fast_uni = 1e18, fast_phi = -1;
+  double chosen;
   bool any_feasible = false;
-  for (int i = 1; i <= N; i++) {
-    double phi = phi_hi * i / N;
-    if (phi <= phi_end + 1e-4) continue;
-    if (!eval_profile(phi, a, phi_end, c->d, &pr)) break;   // higher φ only worse
-    if (pr.t_uni < fast_uni) { fast_uni = pr.t_uni; fast_phi = phi; }
-    if (prof_ok(c, &pr) && pr.t_ship < best_ship) { best_ship = pr.t_ship; any_feasible = true; }
-  }
-  // pass 2 (thrifty): the smallest φ within THRIFT_SHIP_YR of that optimum
-  double chosen = fast_phi > 0 ? fast_phi : phi_hi;
-  if (any_feasible) {
+
+  double phi_geom = phi_geometry_max(c->d, a, phi_end);
+  if (rung > 0) {
+    // a fixed rung: fly the chosen speed, clamped by tank, governor, and the
+    // leg's own geometry (short legs can't finish ramping to high φ)
+    double target = rung >= N_PLAN_RUNGS - 1 ? phi_cap : RUNG_PHI[rung - 1];
+    chosen = target < phi_hi ? target : phi_hi;
+    if (chosen > phi_geom) chosen = phi_geom;
+    if (chosen < phi_end + 0.01 || !eval_profile(chosen, a, phi_end, c->d, &pr)) {
+      chosen = phi_end + 0.01;
+      eval_profile(chosen, a, 0.0, c->d, &pr);
+      phi_end = 0.0;
+    }
+    any_feasible = prof_ok(c, &pr);
+  } else {
+    // AUTO — pass 1: the feasible plan with the least pilot aging (fastest
+    // arrival as best-effort fallback); pass 2: thriftiest φ near that optimum
+    const int N = 120;
+    double phi_top = phi_hi < phi_geom ? phi_hi : phi_geom;
+    double best_ship = 1e18, fast_uni = 1e18, fast_phi = -1;
     for (int i = 1; i <= N; i++) {
-      double phi = phi_hi * i / N;
+      double phi = phi_top * i / N;
       if (phi <= phi_end + 1e-4) continue;
-      if (!eval_profile(phi, a, phi_end, c->d, &pr)) break;
-      if (prof_ok(c, &pr) && pr.t_ship <= best_ship + THRIFT_SHIP_YR) { chosen = phi; break; }
+      if (!eval_profile(phi, a, phi_end, c->d, &pr)) break;   // higher φ only worse
+      if (pr.t_uni < fast_uni) { fast_uni = pr.t_uni; fast_phi = phi; }
+      if (prof_ok(c, &pr) && pr.t_ship < best_ship) { best_ship = pr.t_ship; any_feasible = true; }
+    }
+    chosen = fast_phi > 0 ? fast_phi : phi_top;
+    if (any_feasible) {
+      for (int i = 1; i <= N; i++) {
+        double phi = phi_top * i / N;
+        if (phi <= phi_end + 1e-4) continue;
+        if (!eval_profile(phi, a, phi_end, c->d, &pr)) break;
+        if (prof_ok(c, &pr) && pr.t_ship <= best_ship + THRIFT_SHIP_YR) { chosen = phi; break; }
+      }
+    }
+    if (!eval_profile(chosen, a, phi_end, c->d, &pr)) {   // degenerate short leg
+      chosen = phi_end + 0.01;
+      eval_profile(chosen, a, 0.0, c->d, &pr);
+      phi_end = 0.0;
     }
   }
 
-  if (!eval_profile(chosen, a, phi_end, c->d, &pr)) {   // degenerate short leg
-    chosen = phi_end + 0.01;
-    eval_profile(chosen, a, 0.0, c->d, &pr);
-    phi_end = 0.0;
-  }
   double e = lh_exp(chosen);
   p.phi = chosen;
   p.accel = a;
@@ -120,6 +175,11 @@ RunPlan game_plan(const Contract *c) {
   p.retire_ok = g.pilot_age + pr.t_ship < retire_age();
   p.feasible = any_feasible;
   return p;
+}
+
+RunPlan game_plan(const Contract *c) {
+  int r = g.plan_rung < N_PLAN_RUNGS ? g.plan_rung : 0;
+  return game_plan_rung(c, r);
 }
 
 // One line of the story the clocks write: how long this dock has waited.
@@ -241,7 +301,13 @@ bool buy_upgrade(int id) {
 // Recovery tow — the dockside bailout for a pilot stranded broke with a dry
 // tank: 40% of your credits (min $150) and 4 years of your life for half a tank.
 // ---------------------------------------------------------------------------
-bool tow_available(void) { return g.fuel < tank_cap() * 0.25f; }
+// Offered only when market fuel is out of reach: low tank AND too broke to buy
+// your way back to half. Otherwise the pump is always the better deal — the
+// tow's real price is the 4 years of your life.
+bool tow_available(void) {
+  float half = tank_cap() * 0.5f;
+  return g.fuel < half && fuel_cost(half - g.fuel) > g.credits;
+}
 
 int32_t tow_cost(void) {
   int32_t c = (int32_t)(g.credits * 0.4);
@@ -310,6 +376,7 @@ void game_new(const char *seed_or_null) {
 
 void game_init(void) {
   srand(time(NULL));
+  memset(&g, 0, sizeof g);   // fields appended since a save was written stay 0
   memset(&g_rec, 0, sizeof g_rec);
   if (persist_exists(KEY_RECORDS)) persist_read_data(KEY_RECORDS, &g_rec, sizeof g_rec);
   if (persist_exists(KEY_VERSION) && persist_read_int(KEY_VERSION) == SAVE_VERSION &&

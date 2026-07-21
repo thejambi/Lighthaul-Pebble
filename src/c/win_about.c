@@ -32,13 +32,14 @@ static void win_load(Window *w) {
   GRect b = layer_get_bounds(root);
   s_scroll = scroll_layer_create(b);
   scroll_layer_set_click_config_onto_window(s_scroll, w);
-  s_text = text_layer_create(GRect(6, 0, b.size.w - 12, 2000));
+  int inset = PBL_IF_ROUND_ELSE(26, 6);
+  s_text = text_layer_create(GRect(inset, 0, b.size.w - 2 * inset, 2000));
   text_layer_set_background_color(s_text, GColorBlack);
   text_layer_set_text_color(s_text, GColorWhite);
   text_layer_set_font(s_text, fonts_get_system_font(FONT_KEY_GOTHIC_14));
   text_layer_set_text(s_text, ABOUT_TEXT);
   GSize sz = text_layer_get_content_size(s_text);
-  text_layer_set_size(s_text, GSize(b.size.w - 12, sz.h + 8));
+  text_layer_set_size(s_text, GSize(b.size.w - 2 * inset, sz.h + 8));
   scroll_layer_set_content_size(s_scroll, GSize(b.size.w, sz.h + 16));
   scroll_layer_add_child(s_scroll, text_layer_get_layer(s_text));
   layer_add_child(root, scroll_layer_get_layer(s_scroll));

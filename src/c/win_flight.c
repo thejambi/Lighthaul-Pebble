@@ -22,7 +22,7 @@ static void draw(Layer *layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
-  graphics_context_set_fill_color(ctx, GColorDarkGray);
+  graphics_context_set_fill_color(ctx, COL_FAINT);
   for (int i = 0; i < N_STARS; i++)
     graphics_fill_circle(ctx, s_stars[i], i % 7 == 0 ? 1 : 0);
 
@@ -30,43 +30,45 @@ static void draw(Layer *layer, GContext *ctx) {
   if (t > 1) t = 1;
   double p = ease(t);
 
-  int rx0 = 16, rx1 = b.size.w - 16, ry = b.size.h / 2 + 8;
-  graphics_context_set_stroke_color(ctx, GColorDarkGray);
+  int rx0 = PBL_IF_ROUND_ELSE(30, 16), rx1 = b.size.w - PBL_IF_ROUND_ELSE(30, 16), ry = b.size.h / 2 + 8;
+  graphics_context_set_stroke_color(ctx, COL_FAINT);
   graphics_context_set_stroke_width(ctx, 1);
   graphics_draw_line(ctx, GPoint(rx0, ry), GPoint(rx1, ry));
-  graphics_context_set_fill_color(ctx, GColorChromeYellow);
+  graphics_context_set_fill_color(ctx, COL_GOLD);
   graphics_fill_circle(ctx, GPoint(rx0, ry), 3);
-  graphics_context_set_fill_color(ctx, GColorCyan);
+  graphics_context_set_fill_color(ctx, COL_CYAN);
   graphics_fill_circle(ctx, GPoint(rx1, ry), 3);
 
   int sx = rx0 + (int)((rx1 - rx0) * p);
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_circle(ctx, GPoint(sx, ry), 2);
   // a short drive plume trailing the dot
-  graphics_context_set_stroke_color(ctx, GColorCyan);
+  graphics_context_set_stroke_color(ctx, COL_CYAN);
   graphics_context_set_stroke_width(ctx, 1);
   int plume = 4 + (s_elapsed / TICK_MS) % 3;
   if (sx - plume > rx0) graphics_draw_line(ctx, GPoint(sx - plume, ry), GPoint(sx - 3, ry));
 
+  bool round = IS_ROUND;
+  int lx = round ? 26 : 4;
   char buf[64], t1[20], t2[20];
-  graphics_context_set_text_color(ctx, GColorLightGray);
+  graphics_context_set_text_color(ctx, COL_DIM);
   graphics_draw_text(ctx, s_from, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(4, ry + 8, b.size.w / 2 - 4, 16),
+                     GRect(lx, ry + 8, b.size.w / 2 - lx, 16),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   graphics_draw_text(ctx, s_to, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(b.size.w / 2, ry + 8, b.size.w / 2 - 4, 16),
+                     GRect(b.size.w / 2, ry + 8, b.size.w / 2 - lx, 16),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 
   // the two clocks — the whole point
   fmt_years(t1, sizeof t1, g_last.t_uni * p);
   snprintf(buf, sizeof buf, "UNIVERSE  %s", t1);
-  graphics_context_set_text_color(ctx, GColorChromeYellow);
+  graphics_context_set_text_color(ctx, COL_GOLD);
   graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
                      GRect(0, 22, b.size.w, 28), GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentCenter, NULL);
   fmt_years(t2, sizeof t2, g_last.t_ship * p);
   snprintf(buf, sizeof buf, "SHIP  %s", t2);
-  graphics_context_set_text_color(ctx, GColorCyan);
+  graphics_context_set_text_color(ctx, COL_CYAN);
   graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
                      GRect(0, 52, b.size.w, 28), GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentCenter, NULL);
@@ -74,9 +76,9 @@ static void draw(Layer *layer, GContext *ctx) {
   fmt_beta(t1, sizeof t1, g_last.beta);
   fmt_gamma(t2, sizeof t2, g_last.gamma);
   snprintf(buf, sizeof buf, "cruise %s  gamma %s  @%dg", t1, t2, g_last.g_limit);
-  graphics_context_set_text_color(ctx, GColorLightGray);
+  graphics_context_set_text_color(ctx, COL_DIM);
   graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(0, b.size.h - 22, b.size.w, 16),
+                     GRect(0, round ? ry + 26 : b.size.h - 22, b.size.w, 16),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 }
 
