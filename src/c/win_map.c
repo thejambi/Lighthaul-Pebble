@@ -10,28 +10,56 @@ static Window *s_win;
 static Layer *s_layer;
 static int s_sel;                     // 0..2 offers, 3 = outfitting
 
-static void project_bounds(float *minx, float *maxx, float *minz, float *maxz) {
-  *minx = *minz = 1e9f; *maxx = *maxz = -1e9f;
+// Projection. The CORE cluster alone sets the scale: deep-space stations sit
+// 800-2500 ly out against a ~340 ly cluster, so fitting them all would crush
+// the cluster to a dot. Deep stations instead pin to the frame border along
+// their true bearing — signposts pointing off the map, as the web chart does.
+typedef struct {
+  GRect area;
+  float cx, cz, scale;
+  int mx, my;                         // frame centre, screen coords
+} Proj;
+
+static Proj make_proj(GRect area) {
+  Proj p;
+  float minx = 1e9f, maxx = -1e9f, minz = 1e9f, maxz = -1e9f;
   for (int i = 0; i < g_n_stations; i++) {
     Station *s = &g_stations[i];
-    if (s->deep && !g.deep_license) continue;
-    if (s->x < *minx) *minx = s->x;
-    if (s->x > *maxx) *maxx = s->x;
-    if (s->z < *minz) *minz = s->z;
-    if (s->z > *maxz) *maxz = s->z;
+    if (s->deep) continue;            // core only, licensed or not
+    if (s->x < minx) minx = s->x;
+    if (s->x > maxx) maxx = s->x;
+    if (s->z < minz) minz = s->z;
+    if (s->z > maxz) maxz = s->z;
   }
-}
-
-static GPoint project(float x, float z, GRect area,
-                      float minx, float maxx, float minz, float maxz) {
   float dx = maxx - minx, dz = maxz - minz;
   if (dx < 1) dx = 1;
   if (dz < 1) dz = 1;
   float sx = (area.size.w - 16) / dx, sz = (area.size.h - 16) / dz;
-  float s = sx < sz ? sx : sz;        // uniform scale, centered
-  float cx = (minx + maxx) / 2, cz = (minz + maxz) / 2;
-  return GPoint(area.origin.x + area.size.w / 2 + (int)((x - cx) * s),
-                area.origin.y + area.size.h / 2 + (int)((z - cz) * s));
+  p.area = area;
+  p.scale = sx < sz ? sx : sz;        // uniform scale, centred
+  p.cx = (minx + maxx) / 2;
+  p.cz = (minz + maxz) / 2;
+  p.mx = area.origin.x + area.size.w / 2;
+  p.my = area.origin.y + area.size.h / 2;
+  return p;
+}
+
+static GPoint proj_of(const Proj *p, int idx) {
+  Station *s = &g_stations[idx];
+  float dx = s->x - p->cx, dz = s->z - p->cz;
+  if (!s->deep)
+    return GPoint(p->mx + (int)(dx * p->scale), p->my + (int)(dz * p->scale));
+  // Ride the bearing out to whichever frame edge it meets first. Scaling the
+  // raw bearing finds that edge without ever needing its length.
+  int hw = p->area.size.w / 2 - 7, hh = p->area.size.h / 2 - 7;
+  if (hw < 4) hw = 4;
+  if (hh < 4) hh = 4;
+  float ax = dx < 0 ? -dx : dx, az = dz < 0 ? -dz : dz;
+  float t = 1e9f;
+  if (ax > 1e-4f) { float tx = hw / ax; if (tx < t) t = tx; }
+  if (az > 1e-4f) { float tz = hh / az; if (tz < t) t = tz; }
+  if (t > 1e8f) t = 0;                // degenerate: sits on the centre
+  return GPoint(p->mx + (int)(dx * t), p->my + (int)(dz * t));
 }
 
 static void draw(Layer *layer, GContext *ctx) {
@@ -44,8 +72,7 @@ static void draw(Layer *layer, GContext *ctx) {
   int bot_h = round ? (compact ? 58 : 66) : (compact ? 54 : 62);
   int inset = round ? 24 : 0;
   GRect map_area = GRect(inset, top_h, b.size.w - 2 * inset, b.size.h - top_h - bot_h);
-  float minx, maxx, minz, maxz;
-  project_bounds(&minx, &maxx, &minz, &maxz);
+  Proj pj = make_proj(map_area);
 
   char buf[96], t1[16], t2[16], t3[16];
 
@@ -66,11 +93,9 @@ static void draw(Layer *layer, GContext *ctx) {
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
   // --- selected route (under the dots)
-  GPoint here = project(g_stations[g.station].x, g_stations[g.station].z,
-                        map_area, minx, maxx, minz, maxz);
+  GPoint here = proj_of(&pj, g.station);
   if (s_sel < 3) {
-    Station *t = &g_stations[g_offers[s_sel].to];
-    GPoint dst = project(t->x, t->z, map_area, minx, maxx, minz, maxz);
+    GPoint dst = proj_of(&pj, g_offers[s_sel].to);
     graphics_context_set_stroke_color(ctx, COL_GOLD);
     graphics_context_set_stroke_width(ctx, 2);
     graphics_draw_line(ctx, here, dst);
@@ -80,11 +105,24 @@ static void draw(Layer *layer, GContext *ctx) {
   for (int i = 0; i < g_n_stations; i++) {
     Station *s = &g_stations[i];
     if (s->deep && !g.deep_license) continue;
-    GPoint p = project(s->x, s->z, map_area, minx, maxx, minz, maxz);
+    GPoint p = proj_of(&pj, i);
     bool is_target = s_sel < 3 && g_offers[s_sel].to == i;
+    bool is_here = (i == (int)g.station);
     bool is_offer = false;
     for (int o = 0; o < 3; o++) if (g_offers[o].to == i) is_offer = true;
-    if (i == (int)g.station) {
+    if (s->deep) {
+      // signpost on the frame edge — a square, so it never reads as a
+      // cluster station sitting at that distance
+      int r = (is_target || is_here) ? 3 : 2;
+      graphics_context_set_fill_color(ctx, is_here ? COL_GOLD
+                                                   : (is_target ? COL_CYAN : COL_DIM));
+      graphics_fill_rect(ctx, GRect(p.x - r, p.y - r, r * 2 + 1, r * 2 + 1), 0, GCornerNone);
+      if (is_here) {
+        graphics_context_set_stroke_color(ctx, COL_GOLD);
+        graphics_context_set_stroke_width(ctx, 1);
+        graphics_draw_circle(ctx, p, 6);
+      }
+    } else if (is_here) {
       graphics_context_set_fill_color(ctx, COL_GOLD);
       graphics_fill_circle(ctx, p, 3);
       graphics_context_set_stroke_color(ctx, COL_GOLD);
@@ -97,7 +135,7 @@ static void draw(Layer *layer, GContext *ctx) {
       graphics_context_set_fill_color(ctx, COL_BLUE);
       graphics_fill_circle(ctx, p, 3);
     } else {
-      graphics_context_set_fill_color(ctx, s->deep ? COL_FAINT : GColorWhite);
+      graphics_context_set_fill_color(ctx, GColorWhite);   // plain core station
       graphics_fill_circle(ctx, p, 2);
     }
     // label the selected target so the route reads at a glance

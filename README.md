@@ -13,6 +13,10 @@ with the web game's worldgen — the same seed names the same stations).
 - **Star map** (docked screen): Up/Down cycles the three contract offers plus
   FUEL & OUTFITTING; the gold route shows the selected leg, with pay, g-rating,
   distance, deadline, and a live OK/!! feasibility check. Select opens it.
+  The scale fits the **core cluster only** — deep-space stations are 800–2500 ly
+  out and would crush it to a dot, so once licensed they pin to the frame edge
+  as square signposts along their true bearing, and a route to one runs off the
+  map toward it. (Same abstraction the web chart uses.)
 - **Contract card**: the deal on top, the auto-computed flight plan below —
   cruise β and γ, Δv burned vs. tank, universe-years and ship-years, and what
   age you'll be on arrival. Select accepts and flies.
