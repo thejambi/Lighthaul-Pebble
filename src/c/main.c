@@ -4,7 +4,7 @@
 
 int main(void) {
   game_init();
-  win_map_push();
+  win_title_push();
   app_event_loop();
   game_save();
 }

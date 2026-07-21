@@ -48,12 +48,13 @@ static void draw(Layer *layer, GContext *ctx) {
 
   fmt_beta(t1, sizeof t1, p.beta);
   fmt_gamma(t2, sizeof t2, p.gamma);
-  snprintf(buf, sizeof buf, "CRUISE %s   g %s", t1, t2);
+  snprintf(buf, sizeof buf, "CRUISE %s  GAMMA %s", t1, t2);
   line(ctx, b, &y, buf, GColorCyan, FONT_KEY_GOTHIC_14, 16);
 
   fmt1(t1, sizeof t1, p.dv);
   fmt1(t2, sizeof t2, g.fuel);
-  snprintf(buf, sizeof buf, "BURN dv %s of %s", t1, t2);
+  fmt1(t3, sizeof t3, p.ramp_ship);
+  snprintf(buf, sizeof buf, "dv %s of %s   RAMP %syr", t1, t2, t3);
   line(ctx, b, &y, buf, GColorCyan, FONT_KEY_GOTHIC_14, 16);
 
   fmt_years(t1, sizeof t1, p.t_uni);

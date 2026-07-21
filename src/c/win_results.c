@@ -27,17 +27,20 @@ static void draw(Layer *layer, GContext *ctx) {
     fmt1(t1, sizeof t1, g.pilot_age);
     snprintf(buf, sizeof buf, "Retired at %s, flying the Courier.", t1);
     line(ctx, b, &y, buf, GColorLightGray, FONT_KEY_GOTHIC_14, 20);
-    snprintf(buf, sizeof buf, "FINAL BALANCE $%ld", (long)g.credits);
+    snprintf(buf, sizeof buf, "FINAL BALANCE $%ld%s", (long)g.credits,
+             g_last.rec_balance ? " *BEST*" : "");
     line(ctx, b, &y, buf, GColorChromeYellow, FONT_KEY_GOTHIC_18_BOLD, 22);
     snprintf(buf, sizeof buf, "RANK: %s", rank_for(g.credits));
     line(ctx, b, &y, buf, GColorChromeYellow, FONT_KEY_GOTHIC_18_BOLD, 24);
-    snprintf(buf, sizeof buf, "%d delivered, %d failed", g.deliveries, g.failures);
+    snprintf(buf, sizeof buf, "%d delivered, %d failed%s", g.deliveries, g.failures,
+             g_last.rec_deliveries ? " *BEST*" : "");
     line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, 16);
     fmt_years(t1, sizeof t1, g.uni_time);
     snprintf(buf, sizeof buf, "%s passed in the universe", t1);
     line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, 16);
     fmt_gamma(t1, sizeof t1, g.max_gamma);
-    snprintf(buf, sizeof buf, "highest Lorentz g: %s", t1);
+    snprintf(buf, sizeof buf, "highest gamma: %s%s", t1,
+             g_last.rec_gamma ? " *BEST*" : "");
     line(ctx, b, &y, buf, GColorWhite, FONT_KEY_GOTHIC_14, 16);
     snprintf(buf, sizeof buf, "seed: %s", g.seed);
     line(ctx, b, &y, buf, GColorDarkGray, FONT_KEY_GOTHIC_14, 16);
@@ -92,8 +95,15 @@ static void click_sel(ClickRecognizerRef r, void *ctx) {
     layer_mark_dirty(s_layer);
     return;
   }
-  if (s_page == 1) game_new(NULL);
+  if (s_page == 1) {
+    // career over: back to the title with a fresh career staged
+    game_new(NULL);
+    window_stack_pop_all(false);
+    win_title_push();
+    return;
+  }
   window_stack_pop_all(false);
+  win_title_push();
   win_map_push();
   win_map_refresh();
 }

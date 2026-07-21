@@ -12,7 +12,8 @@ static MenuLayer *s_menu;
 static uint16_t get_num_sections(MenuLayer *m, void *ctx) { return 2; }
 
 static uint16_t get_num_rows(MenuLayer *m, uint16_t section, void *ctx) {
-  return section == SEC_FUEL ? 2 : 2;
+  if (section == SEC_FUEL) return tow_available() ? 3 : 2;
+  return 2;
 }
 
 static int16_t get_header_height(MenuLayer *m, uint16_t section, void *ctx) {
@@ -44,13 +45,16 @@ static void draw_row(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
       snprintf(title, sizeof title, "TOP UP +%s dv", t1);
       if (q < 0.05f) snprintf(sub, sizeof sub, "tank is full");
       else snprintf(sub, sizeof sub, "$%ld", (long)fuel_cost(q));
-    } else {
+    } else if (idx->row == 1) {
       snprintf(title, sizeof title, "FILL TANK");
       if (missing < 0.05f) snprintf(sub, sizeof sub, "tank is full");
       else {
         fmt1(t1, sizeof t1, missing);
         snprintf(sub, sizeof sub, "+%s dv for $%ld (bulk rate)", t1, (long)fuel_cost(missing));
       }
+    } else {
+      snprintf(title, sizeof title, "RECOVERY TOW");
+      snprintf(sub, sizeof sub, "half tank: $%ld + 4yr of life", (long)tow_cost());
     }
   } else {
     int id = g_stations[g.station].shop[idx->row];
@@ -68,7 +72,10 @@ static void draw_row(GContext *ctx, const Layer *cell, MenuIndex *idx, void *dat
 static void select_row(MenuLayer *m, MenuIndex *idx, void *data) {
   float missing = tank_cap() - g.fuel;
   bool bought = false;
-  if (idx->section == SEC_FUEL) {
+  if (idx->section == SEC_FUEL && idx->row == 2) {
+    guild_tow();
+    bought = true;
+  } else if (idx->section == SEC_FUEL) {
     float q = idx->row == 0 ? (missing < 2.0f ? missing : 2.0f) : missing;
     if (q > 0.05f && g.credits >= fuel_cost(0.1f)) {
       buy_fuel(q);

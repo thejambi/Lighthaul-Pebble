@@ -12,6 +12,9 @@
 #define DEEP_GAMMA 25000.0
 #define REP_PER_DELIVERY 0.03
 #define REP_MAX 0.75
+#define G_ACCEL 1.032           // c/yr per felt g — honest 1g = 1.032 ly/yr^2
+#define PHI_DOCK 0.2027         // rapidity of 0.2c — hot-dock arrival speed
+#define THRIFT_SHIP_YR 0.05     // don't burn extra dv to save under ~3 weeks
 
 enum { UP_TANK, UP_DRIVE, UP_DAMPER, UP_BROKER, UP_REJUV, UP_OVERDRIVE, UP_AUTOPILOT, N_UPGRADES };
 
@@ -40,18 +43,24 @@ typedef struct {
 extern Game g;
 extern Contract g_offers[3];
 
-// The auto-run flight plan: burn the whole usable tank (pilot time is the real
-// currency), capped by the redline governor — then check what that buys.
+// The auto-run flight plan: a burn→cruise→brake profile at the hardest proper
+// acceleration the cargo's g-rating (through your dampers) tolerates. The
+// optimizer picks the cruise rapidity that minimizes pilot aging within the
+// deadline, the passenger cap, and the tank — thriftily: it won't spend Δv on
+// savings under THRIFT_SHIP_YR.
 typedef struct {
-  double beta, gamma;
+  double phi, beta, gamma;      // cruise rapidity and its β/γ
+  double accel;                 // burn/brake proper acceleration, c/yr
   float dv;                     // fuel this run actually consumes
-  float t_uni, t_ship;          // universe-years, ship-years
-  bool deadline_ok, aging_ok, retire_ok;
+  float t_uni, t_ship;          // universe-years, ship-years (ramps included)
+  float ramp_ship;              // ship-years spent ramping (the g-rating's price)
+  bool deadline_ok, aging_ok, retire_ok, feasible;
 } RunPlan;
 
 typedef struct {
   bool ok, late, aged_out, retired, licensed;
-  uint8_t type;
+  bool rec_balance, rec_deliveries, rec_gamma;   // records broken at retirement
+  uint8_t type, g_limit;
   int32_t pay;
   float t_uni, t_ship;
   double gamma, beta;
@@ -61,10 +70,19 @@ typedef struct {
 } RunResult;
 extern RunResult g_last;
 
+// All-time bests, persisted across careers.
+typedef struct {
+  int32_t best_balance;
+  uint16_t best_deliveries, careers;
+  float best_gamma;
+} Records;
+extern Records g_rec;
+
 // derived dials
 float tank_cap(void);
 float retire_age(void);
 float fuel_factor(void);
+float load_factor(void);                   // felt-load multiplier (dampers)
 double cap_beta(void);
 int32_t contract_pay(const Contract *c);   // base pay × broker × reputation
 
@@ -77,7 +95,13 @@ void buy_fuel(float qty);                  // clamped to tank space & credits
 int32_t upgrade_cost(int id);              // next level, event-adjusted; -1 if maxed
 bool buy_upgrade(int id);
 
+// stranded at a dock: 40% of your credits and 4 years of your life for half a tank
+bool tow_available(void);
+int32_t tow_cost(void);
+void guild_tow(void);
+
 const char *rank_for(int32_t balance);
+void daily_seed(char *out, size_t cap);    // today's shared map, "lhYYMMDD"
 
 void game_new(const char *seed_or_null);
 void game_init(void);                      // load save or start fresh

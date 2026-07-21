@@ -16,20 +16,31 @@ with the web game's worldgen — the same seed names the same stations).
 - **Contract card**: the deal on top, the auto-computed flight plan below —
   cruise β and γ, Δv burned vs. tank, universe-years and ship-years, and what
   age you'll be on arrival. Select accepts and flies.
-- **The run**: resolved instantly with the real clock math (deadlines on
-  universe time `d/β`, aging on ship time `d/βγ`, fuel as rapidity paid again
-  to brake), replayed as a short animation of the two clocks ticking at their
-  true relative rates.
+- **The run**: a burn→cruise→brake profile at the hardest proper acceleration
+  the load's g-rating (through your dampers) tolerates — honest relativistic
+  kinematics, closed-form in rapidity. Gentle ramps cost years on both clocks,
+  so fragile freight is where your career actually goes. The optimizer picks
+  the cruise rapidity that minimizes your aging within the deadline, the
+  passenger cap, and the tank (and won't waste Δv on savings under ~3 weeks).
+  Replayed as a short animation of the two clocks ticking at their true
+  relative rates.
 - **Fuel & outfitting**: bulk-discounted Δv and the dock's two-item upgrade
-  shop (tank, drive, dampers, broker license, rejuv, Redline Coils, docking
-  assist). Dock economy events (booms, strikes, fuel rationing) move prices.
+  shop (tank, drive, dampers, broker license, rejuv, Redline Coils, and a
+  Docking Assist reworked for the watch: hot-dock at 0.2c, saving Δv every
+  leg). Dock economy events (booms, strikes, fuel rationing) move prices.
+  Stranded with a dry tank? A **recovery tow** costs 40% of your credits and
+  4 years of your life.
 - **Career**: reputation ramps pay, pilots retire at 82 (plus rejuv), and the
   final balance earns a rank from *Deadhead* to *The Ageless*. Touch γ 25,000
-  on a clean delivery and the deep-space long-haul stations open up.
+  on a clean delivery and the deep-space long-haul stations open up — which
+  the ramp physics makes a real gate: only maxed dampers on rugged long-haul
+  freight can build that γ inside a deadline.
+- **Title screen**: continue, new career, today's shared **daily run**
+  (date-seeded), and a how-to-play primer. All-time records (best balance,
+  most deliveries, highest γ) persist across careers.
 
-The flight plan burns the whole usable tank — pilot time is the real currency,
-so speed is controlled by how much fuel you choose to buy. The state persists
-on the watch between launches.
+Since the autopilot flies each leg as fast as the fuel allows, how much fuel
+you buy is the throttle. The state persists on the watch between launches.
 
 ## Building & running
 

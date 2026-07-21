@@ -73,7 +73,7 @@ static void draw(Layer *layer, GContext *ctx) {
 
   fmt_beta(t1, sizeof t1, g_last.beta);
   fmt_gamma(t2, sizeof t2, g_last.gamma);
-  snprintf(buf, sizeof buf, "cruise %s   g %s", t1, t2);
+  snprintf(buf, sizeof buf, "cruise %s  gamma %s  @%dg", t1, t2, g_last.g_limit);
   graphics_context_set_text_color(ctx, GColorLightGray);
   graphics_draw_text(ctx, buf, fonts_get_system_font(FONT_KEY_GOTHIC_14),
                      GRect(0, b.size.h - 22, b.size.w, 16),

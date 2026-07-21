@@ -13,12 +13,15 @@ const UpgradeDef UPGRADES[N_UPGRADES] = {
   [UP_BROKER]    = { "Broker License",   "+8% contract pay",    3, {280, 460, 640} },
   [UP_REJUV]     = { "Rejuv Course",     "+6 yr career",        4, {300, 460, 640, 840} },
   [UP_OVERDRIVE] = { "Redline Coils",    "a 9 nearer c",        6, {400, 720, 1150, 1700, 2400, 3300} },
-  [UP_AUTOPILOT] = { "Docking Assist",   "auto-brake to dock",  1, {500} },
+  [UP_AUTOPILOT] = { "Docking Assist",   "hot-dock at 0.2c: saves dv each leg", 1, {500} },
 };
+
+Records g_rec;
 
 float tank_cap(void)    { return BASE_TANK + g.upgrades[UP_TANK] * 3.0f; }
 float retire_age(void)  { return RETIRE_AGE + g.upgrades[UP_REJUV] * 6.0f; }
 float fuel_factor(void) { return 1.0f - g.upgrades[UP_DRIVE] * 0.12f; }
+float load_factor(void) { return 0.85f * (1.0f - g.upgrades[UP_DAMPER] * 0.15f); }  // Courier hull baseline
 static double pay_mult(void) { return 1.0 + g.upgrades[UP_BROKER] * 0.08; }
 static double rep_mult(void) {
   double r = g.deliveries * REP_PER_DELIVERY;
@@ -35,26 +38,87 @@ int32_t contract_pay(const Contract *c) {
 }
 
 // ---------------------------------------------------------------------------
-// Flight planning & resolution — same clock math as the web game's HUD:
-// deadlines on universe time d/β, everyone aboard ages ship time d/(βγ),
-// Δv is rapidity and you pay it again to brake.
+// Flight planning — burn→cruise→brake with honest relativistic kinematics.
+// Rapidity makes it closed-form: ramping 0→φ at proper acceleration a takes
+// φ/a ship-years, sinh(φ)/a universe-years, and (cosh(φ)−1)/a ly; the cruise
+// covers what's left at βγ = sinh(φ) ly per ship-year. Gentle (low-g) ramps
+// cost both clocks — that's the g-rating's price, and where aging comes from.
 // ---------------------------------------------------------------------------
+typedef struct { double t_uni, t_ship, ramp_ship; } Prof;
+
+static bool eval_profile(double phi, double a, double phi_end, double d, Prof *o) {
+  double e = lh_exp(phi);
+  double sh = 0.5 * (e - 1.0 / e), ch = 0.5 * (e + 1.0 / e);
+  double ee = lh_exp(phi_end);
+  double she = 0.5 * (ee - 1.0 / ee), che = 0.5 * (ee + 1.0 / ee);
+  double dc = d - (ch - 1.0) / a - (ch - che) / a;   // cruise distance
+  if (dc < 0) return false;                          // can't even finish ramping
+  o->ramp_ship = (2.0 * phi - phi_end) / a;
+  o->t_ship = o->ramp_ship + dc / sh;
+  o->t_uni = (2.0 * sh - she) / a + dc * ch / sh;
+  return true;
+}
+
+static bool prof_ok(const Contract *c, const Prof *pr) {
+  return pr->t_uni <= c->deadline
+      && (c->type == 0 || pr->t_ship <= c->max_aging)
+      && g.pilot_age + pr->t_ship < retire_age();
+}
+
 RunPlan game_plan(const Contract *c) {
   RunPlan p;
-  double phi_avail = g.fuel / (2.0 * fuel_factor());
-  double beta = lh_tanh(phi_avail);
-  double cap = cap_beta();
-  if (beta > cap) beta = cap;
-  if (beta < 1e-6) beta = 1e-6;
-  double gamma = 1.0 / lh_sqrt((1.0 - beta) * (1.0 + beta));
-  p.beta = beta;
-  p.gamma = gamma;
-  p.dv = (float)(2.0 * lh_atanh(beta) * fuel_factor());
-  p.t_uni = (float)(c->d / beta);
-  p.t_ship = (float)(c->d / (beta * gamma));
-  p.deadline_ok = p.t_uni <= c->deadline;
-  p.aging_ok = c->type == 0 || p.t_ship <= c->max_aging;
-  p.retire_ok = g.pilot_age + p.t_ship < retire_age();
+  memset(&p, 0, sizeof p);
+  double a = (double)c->g_limit / load_factor() * G_ACCEL;
+  double ff = fuel_factor();
+  double phi_end = g.upgrades[UP_AUTOPILOT] ? PHI_DOCK : 0.0;
+  double phi_hi = (g.fuel / ff + phi_end) * 0.5;      // Δv = (2φ−φ_end)·ff ≤ fuel
+  double phi_cap = lh_atanh(cap_beta());
+  if (phi_hi > phi_cap) phi_hi = phi_cap;
+  if (phi_hi < phi_end + 0.01) { phi_hi = phi_end + 0.01; phi_end = 0.0; }  // dry tank: crawl
+
+  // pass 1: the feasible plan with the least pilot aging (and the fastest
+  // arrival as a best-effort fallback when nothing is feasible)
+  const int N = 120;
+  Prof pr;
+  double best_ship = 1e18, fast_uni = 1e18, fast_phi = -1;
+  bool any_feasible = false;
+  for (int i = 1; i <= N; i++) {
+    double phi = phi_hi * i / N;
+    if (phi <= phi_end + 1e-4) continue;
+    if (!eval_profile(phi, a, phi_end, c->d, &pr)) break;   // higher φ only worse
+    if (pr.t_uni < fast_uni) { fast_uni = pr.t_uni; fast_phi = phi; }
+    if (prof_ok(c, &pr) && pr.t_ship < best_ship) { best_ship = pr.t_ship; any_feasible = true; }
+  }
+  // pass 2 (thrifty): the smallest φ within THRIFT_SHIP_YR of that optimum
+  double chosen = fast_phi > 0 ? fast_phi : phi_hi;
+  if (any_feasible) {
+    for (int i = 1; i <= N; i++) {
+      double phi = phi_hi * i / N;
+      if (phi <= phi_end + 1e-4) continue;
+      if (!eval_profile(phi, a, phi_end, c->d, &pr)) break;
+      if (prof_ok(c, &pr) && pr.t_ship <= best_ship + THRIFT_SHIP_YR) { chosen = phi; break; }
+    }
+  }
+
+  if (!eval_profile(chosen, a, phi_end, c->d, &pr)) {   // degenerate short leg
+    chosen = phi_end + 0.01;
+    eval_profile(chosen, a, 0.0, c->d, &pr);
+    phi_end = 0.0;
+  }
+  double e = lh_exp(chosen);
+  p.phi = chosen;
+  p.accel = a;
+  p.gamma = 0.5 * (e + 1.0 / e);
+  p.beta = (e - 1.0 / e) / (e + 1.0 / e);
+  p.dv = (float)((2.0 * chosen - phi_end) * ff);
+  if (p.dv > g.fuel) p.dv = g.fuel;
+  p.t_uni = (float)pr.t_uni;
+  p.t_ship = (float)pr.t_ship;
+  p.ramp_ship = (float)pr.ramp_ship;
+  p.deadline_ok = pr.t_uni <= c->deadline;
+  p.aging_ok = c->type == 0 || pr.t_ship <= c->max_aging;
+  p.retire_ok = g.pilot_age + pr.t_ship < retire_age();
+  p.feasible = any_feasible;
   return p;
 }
 
@@ -82,6 +146,7 @@ void game_resolve(const Contract *c) {
   RunPlan p = game_plan(c);
   memset(&g_last, 0, sizeof g_last);
   g_last.type = c->type;
+  g_last.g_limit = c->g_limit;
   g_last.t_uni = p.t_uni;
   g_last.t_ship = p.t_ship;
   g_last.beta = p.beta;
@@ -114,6 +179,13 @@ void game_resolve(const Contract *c) {
   g_stations[c->to].last_visit = g.uni_time;
   g.station = c->to;
   g_last.retired = g.pilot_age >= retire_age();
+  if (g_last.retired) {
+    // fold this career into the all-time records
+    g_rec.careers++;
+    if (g.credits > g_rec.best_balance) { g_rec.best_balance = g.credits; g_last.rec_balance = true; }
+    if (g.deliveries > g_rec.best_deliveries) { g_rec.best_deliveries = g.deliveries; g_last.rec_deliveries = true; }
+    if (g.max_gamma > g_rec.best_gamma) { g_rec.best_gamma = g.max_gamma; g_last.rec_gamma = true; }
+  }
 
   // the next dock's economy and offer board come off the same seeded stream
   g.dock_event = world_roll_dock_event();
@@ -165,6 +237,27 @@ bool buy_upgrade(int id) {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Recovery tow — the dockside bailout for a pilot stranded broke with a dry
+// tank: 40% of your credits (min $150) and 4 years of your life for half a tank.
+// ---------------------------------------------------------------------------
+bool tow_available(void) { return g.fuel < tank_cap() * 0.25f; }
+
+int32_t tow_cost(void) {
+  int32_t c = (int32_t)(g.credits * 0.4);
+  return c < 150 ? 150 : c;
+}
+
+void guild_tow(void) {
+  if (!tow_available()) return;
+  g.credits -= tow_cost();
+  if (g.credits < 0) g.credits = 0;
+  g.pilot_age += 4;
+  g.uni_time += 4;
+  if (g.fuel < tank_cap() * 0.5f) g.fuel = tank_cap() * 0.5f;
+  game_save();
+}
+
 const char *rank_for(int32_t bal) {
   if (bal >= 128000) return "The Ageless";
   if (bal >= 64000)  return "Deep Space Magnate";
@@ -184,7 +277,14 @@ const char *rank_for(int32_t bal) {
 #define KEY_GAME 1
 #define KEY_OFFERS 2
 #define KEY_VISITS 3
+#define KEY_RECORDS 4
 #define SAVE_VERSION 1
+
+void daily_seed(char *out, size_t cap) {
+  time_t now = time(NULL);
+  struct tm *t = localtime(&now);
+  snprintf(out, cap, "lh%02d%02d%02d", t->tm_year % 100, t->tm_mon + 1, t->tm_mday);
+}
 
 void game_new(const char *seed_or_null) {
   memset(&g, 0, sizeof g);
@@ -210,6 +310,8 @@ void game_new(const char *seed_or_null) {
 
 void game_init(void) {
   srand(time(NULL));
+  memset(&g_rec, 0, sizeof g_rec);
+  if (persist_exists(KEY_RECORDS)) persist_read_data(KEY_RECORDS, &g_rec, sizeof g_rec);
   if (persist_exists(KEY_VERSION) && persist_read_int(KEY_VERSION) == SAVE_VERSION &&
       persist_exists(KEY_GAME) && persist_exists(KEY_OFFERS)) {
     persist_read_data(KEY_GAME, &g, sizeof g);
@@ -234,4 +336,5 @@ void game_save(void) {
   for (int i = 0; i < MAX_STATIONS; i++)
     visits[i] = i < g_n_stations ? g_stations[i].last_visit : -1;
   persist_write_data(KEY_VISITS, visits, sizeof visits);
+  persist_write_data(KEY_RECORDS, &g_rec, sizeof g_rec);
 }
