@@ -17,27 +17,35 @@ with the web game's worldgen — the same seed names the same stations).
   cruise β and γ, Δv burned vs. tank, universe-years and ship-years, and what
   age you'll be on arrival. Select accepts and flies.
 - **The run**: a burn→cruise→brake profile at the hardest proper acceleration
-  the load's g-rating (through your dampers) tolerates — capped by the drive's
-  own 7g thrust — honest relativistic kinematics, closed-form in rapidity.
+  the load's g-rating (through your dampers) tolerates — capped again by what
+  the drive can actually give (7g stock, up to 55g with Redline Coils) —
+  honest relativistic kinematics, closed-form in rapidity.
   Gentle ramps cost years on both clocks, so fragile freight is where your
   career actually goes. Replayed as a short animation of the two clocks
   ticking at their true relative rates.
 - **The speed ladder**: Up/Down on the contract card cycles the cruise plan —
   AUTO (least aging within deadline, cap, and tank), fixed rungs from 0.5c to
-  0.999999c, and MAX (whatever the governor allows — Redline Coils raise it). Every rung shows its Δv, both clocks, and your arrival age live: dial
-  down to save fuel at the cost of your years, dial up to buy youth with Δv.
-  The pick is sticky between flights.
+  0.999999c, and **MAX**, which becomes **WARP** once Redline Coils are
+  fitted. Every rung shows its Δv, thrust, both clocks, and your arrival age
+  live: dial down to save fuel at the cost of your years, dial up to buy youth
+  with Δv. The pick is sticky between flights.
 - **Fuel & outfitting**: bulk-discounted Δv and the dock's two-item upgrade
-  shop (tank, drive, dampers, broker license, rejuv, Redline Coils, and a
-  Docking Assist reworked for the watch: hot-dock at 0.2c, saving Δv every
-  leg). Dock economy events (booms, strikes, fuel rationing) move prices.
+  shop (tank, drive, dampers, broker license, rejuv, a Docking Assist reworked
+  for the watch — hot-dock at 0.2c, saving Δv every leg — and Redline Coils,
+  which raise both the governor and the drive's thrust, mirroring the web
+  game's coil-gated warp burn). Dampers raise what the load will take, coils
+  raise what the drive can give; you need both to use either fully. Dock economy events (booms, strikes, fuel rationing) move prices.
   Stranded broke with a dry tank? A **recovery tow** appears only when you
   can't afford market fuel — its real price is 4 years of your life.
 - **Career**: reputation ramps pay, pilots retire at 82 (plus rejuv), and the
-  final balance earns a rank from *Deadhead* to *The Ageless*. Touch γ 25,000
-  on a clean delivery and the deep-space long-haul stations open up — which
-  the ramp physics makes a real gate: only maxed dampers on rugged long-haul
-  freight can build that γ inside a deadline.
+  final balance earns a rank from *Deadhead* to *The Ageless*. Hit **redline —
+  γ 2,000**, the same number the web game paints red — on a clean delivery and
+  the deep-space long-haul stations open up. Ramp geometry makes it a real
+  multi-part gate rather than a grind: a leg's peak γ is capped at ~`d·a/2`,
+  so it takes **Redline Coils** (unreachable without them, and comfortable
+  around level 3), a ~200 ly leg, rugged freight to use the thrust, and a tank
+  or drive upgrade to afford the Δv. Out in the halo the coils finally have
+  road enough to run.
 - **Title screen**: continue, new career, today's shared **daily run**
   (date-seeded), and a how-to-play primer. All-time records (best balance,
   most deliveries, highest γ) persist across careers.

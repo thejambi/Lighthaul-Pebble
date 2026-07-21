@@ -12,7 +12,7 @@ const UpgradeDef UPGRADES[N_UPGRADES] = {
   [UP_DAMPER]    = { "Inertial Dampers", "-15% felt load",      3, {260, 420, 600} },
   [UP_BROKER]    = { "Broker License",   "+8% contract pay",    3, {280, 460, 640} },
   [UP_REJUV]     = { "Rejuv Course",     "+6 yr career",        4, {300, 460, 640, 840} },
-  [UP_OVERDRIVE] = { "Redline Coils",    "a 9 nearer c",        6, {400, 720, 1150, 1700, 2400, 3300} },
+  [UP_OVERDRIVE] = { "Redline Coils",    "+thrust, +MAX",      6, {400, 720, 1150, 1700, 2400, 3300} },
   [UP_AUTOPILOT] = { "Docking Assist",   "hot-dock at 0.2c: saves dv each leg", 1, {500} },
 };
 
@@ -22,6 +22,18 @@ float tank_cap(void)    { return BASE_TANK + g.upgrades[UP_TANK] * 3.0f; }
 float retire_age(void)  { return RETIRE_AGE + g.upgrades[UP_REJUV] * 6.0f; }
 float fuel_factor(void) { return 1.0f - g.upgrades[UP_DRIVE] * 0.12f; }
 float load_factor(void) { return 0.85f * (1.0f - g.upgrades[UP_DAMPER] * 0.15f); }  // Courier hull baseline
+
+// Redline Coils raise the drive's thrust ceiling as well as the governor. In
+// the web game the coil-gated "warp burn" runs the throttle 9x faster with its
+// drive response scaled by coil level, which is what makes redline speeds
+// reachable inside the small core cluster. Here runway is (γ−1)/a, so thrust
+// is the only lever on how much of a leg a burn eats — without this, coils are
+// dead weight anywhere but the deep halo. Roughly x1.4 per level.
+float ship_thrust_g(void) {
+  static const float THRUST_G[7] = { 7, 10, 14, 20, 28, 39, 55 };
+  int lv = g.upgrades[UP_OVERDRIVE];
+  return THRUST_G[lv > 6 ? 6 : lv];
+}
 static double pay_mult(void) { return 1.0 + g.upgrades[UP_BROKER] * 0.08; }
 static double rep_mult(void) {
   double r = g.deliveries * REP_PER_DELIVERY;
@@ -81,8 +93,10 @@ static double phi_geometry_max(double d, double a, double phi_end) {
 }
 
 // The speed ladder: fixed cruise rungs the player cycles on the contract card.
-// Rung 0 is AUTO (optimizer), rungs 1..7 fixed speeds, the last is REDLINE —
-// whatever the governor allows, so Redline Coils raise that rung's γ.
+// Rung 0 is AUTO (optimizer), rungs 1..7 fixed speeds, the last is MAX —
+// whatever the governor allows, so Redline Coils raise that rung's ceiling.
+// Note a leg's own geometry (φ ≤ arcosh(d·a/2 + 1)) usually binds first in the
+// core cluster; the coils only pay off out in the deep-space halo.
 static const double RUNG_PHI[N_PLAN_RUNGS - 2] = {
   0.549306,   // 0.5c
   1.472219,   // 0.9c
@@ -96,6 +110,9 @@ static const double RUNG_PHI[N_PLAN_RUNGS - 2] = {
 const char *plan_rung_label(int rung) {
   static const char *L[N_PLAN_RUNGS] = { "AUTO", "0.5c", "0.9c", "0.99c",
     "0.999c", "0.9999c", "0.99999c", "0.999999c", "MAX" };
+  // the top rung becomes WARP once Redline Coils are fitted — it's the rung
+  // that can suddenly reach what nothing else could, so it carries the badge
+  if (rung == N_PLAN_RUNGS - 1 && g.upgrades[UP_OVERDRIVE] > 0) return "WARP";
   return L[rung < 0 || rung >= N_PLAN_RUNGS ? 0 : rung];
 }
 
@@ -105,7 +122,8 @@ RunPlan game_plan_rung(const Contract *c, int rung) {
   // burn/brake acceleration: the cargo's rating through the dampers, but never
   // more than the drive itself can thrust
   double a_g = (double)c->g_limit / load_factor();
-  if (a_g > SHIP_MAX_G) a_g = SHIP_MAX_G;
+  double t_max = ship_thrust_g();
+  if (a_g > t_max) a_g = t_max;
   double a = a_g * G_ACCEL;
   double ff = fuel_factor();
   double phi_end = g.upgrades[UP_AUTOPILOT] ? PHI_DOCK : 0.0;

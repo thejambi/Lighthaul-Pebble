@@ -79,8 +79,12 @@ static void draw(Layer *layer, GContext *ctx) {
   fmt1(t1, sizeof t1, p.dv);
   fmt1(t2, sizeof t2, g.fuel);
   fmt1(t3, sizeof t3, p.ramp_ship);
+  // drive thrust for the ramp (after Redline Coils). Note this reads HIGHER
+  // than the contract's g-rating when you have dampers — the dampers absorb
+  // the difference, so the load still only feels its rated load.
+  int thrust_g = (int)(p.accel / G_ACCEL + 0.5);
   if (compact) snprintf(buf, sizeof buf, "dv %s  RAMP %syr", t1, t3);
-  else snprintf(buf, sizeof buf, "dv %s of %s   RAMP %syr", t1, t2, t3);
+  else snprintf(buf, sizeof buf, "dv %s RAMP %syr THRUST %dg", t1, t3, thrust_g);
   line(ctx, b, &y, buf, COL_CYAN, FONT_KEY_GOTHIC_14, lh);
 
   fmt_years(t1, sizeof t1, p.t_uni);

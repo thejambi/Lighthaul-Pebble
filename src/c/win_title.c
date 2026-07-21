@@ -88,6 +88,7 @@ static void start_career(const char *seed) {
   s_confirm = -1;
   layer_mark_dirty(s_layer);
   win_map_push();
+  win_map_refresh();   // a new career opens on offer 1, not the last career's row
 }
 
 static void click_sel(ClickRecognizerRef r, void *ctx) {
