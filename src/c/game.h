@@ -8,16 +8,16 @@
 #define FUEL_PRICE 20.0
 #define FUEL_BULK_DISC 0.02
 #define FUEL_MAX_DISC 0.35
-#define C_CAP 0.9999995
+// (the web's C_CAP 0.9999995 γ-governor is replaced here by pace_cap() — a
+// sustained proper-velocity ceiling — see the note on that function)
 // Deep Space License threshold — γ2000, the same number the web game calls
-// redline (its HUD goes red and buzzes there). A leg's peak γ is capped by
-// honest ramp geometry at ~d·a/2, so this is a genuine multi-part gate rather
-// than a grind. Measured over 400 seeds, % of careers where it's reachable
-// at all: coils L0 0%, L1 12%, L2 93%, L3 100% — so it *requires* Redline
-// Coils, which is what the web intends by "redline territory". Also needs a
-// ~200 ly leg, rugged freight to use the thrust, and a tank or drive upgrade
-// to afford the Δv 16.6. (γ3000 would strand 12% of maps — see the γ25,000
-// mistake this replaced.)
+// redline (its HUD goes red and buzzes there). Three limits must all clear
+// it: the pace governor (coils L3 = 2050 is the first level over the line,
+// so the license strictly requires coils L3), leg geometry ~d·a/2 (needs a
+// ~200 ly leg at L3 thrust — present in 100% of 400 measured seeds), and
+// fuel (Δv 16.6 — a tank or drive upgrade). Rugged freight to use the
+// thrust, as ever. (History: the web's γ25,000 was unreachable here and
+// would have locked deep space forever.)
 #define DEEP_GAMMA 2000.0
 #define REP_PER_DELIVERY 0.03
 #define REP_MAX 0.75
@@ -99,7 +99,7 @@ float retire_age(void);
 float fuel_factor(void);
 float load_factor(void);                   // felt-load multiplier (dampers)
 float ship_thrust_g(void);                 // drive's max proper thrust (Redline Coils)
-double cap_beta(void);
+double pace_cap(void);                     // governor: max sustained βγ, ly per ship-yr
 int32_t contract_pay(const Contract *c);   // base pay × broker × reputation
 
 RunPlan game_plan(const Contract *c);              // plan at the sticky rung

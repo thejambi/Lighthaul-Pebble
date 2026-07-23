@@ -40,9 +40,18 @@ static double rep_mult(void) {
   return 1.0 + (r > REP_MAX ? REP_MAX : r);
 }
 
-double cap_beta(void) {
-  double b = 1.0 - (1.0 - C_CAP) * lh_pow10i(-(int)g.upgrades[UP_OVERDRIVE]);
-  return b > 1.0 - 5.1e-13 ? 1.0 - 4.9995e-13 : b;
+// The governor, watch edition: a ceiling on SUSTAINED proper velocity — βγ,
+// literally the light-years you eat per ship-year. This is the web's pilot-
+// frame pacing softcap (pace(), GAMMA_CAP × coils) made diegetic. A peak-γ
+// governor never binds here: the perfect autopilot would sustain γ50,000+
+// across a whole deep leg and a 3800 ly haul would age you 0.8yr — so the
+// pace cap is what makes long hauls cost real years while ramps (the
+// g-rating game) stay untouched. Coils raise it ~×1.3/level; L3 clears the
+// γ2000 license gate exactly. Cruise aging on a long leg ≈ d / pace_cap.
+double pace_cap(void) {
+  static const double PACE[7] = { 800, 1100, 1500, 2050, 2600, 3300, 4200 };
+  int lv = g.upgrades[UP_OVERDRIVE];
+  return PACE[lv > 6 ? 6 : lv];
 }
 
 int32_t contract_pay(const Contract *c) {
@@ -128,7 +137,8 @@ RunPlan game_plan_rung(const Contract *c, int rung) {
   double ff = fuel_factor();
   double phi_end = g.upgrades[UP_AUTOPILOT] ? PHI_DOCK : 0.0;
   double phi_hi = (g.fuel / ff + phi_end) * 0.5;      // Δv = (2φ−φ_end)·ff ≤ fuel
-  double phi_cap = lh_atanh(cap_beta());
+  double bg = pace_cap();
+  double phi_cap = lh_ln(bg + lh_sqrt(bg * bg + 1.0));   // arsinh: βγ ≤ pace
   if (phi_hi > phi_cap) phi_hi = phi_cap;
   if (phi_hi < phi_end + 0.01) { phi_hi = phi_end + 0.01; phi_end = 0.0; }  // dry tank: crawl
 

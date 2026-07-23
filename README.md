@@ -46,10 +46,11 @@ with the web game's worldgen — the same seed names the same stations).
   γ 2,000**, the same number the web game paints red — on a clean delivery and
   the deep-space long-haul stations open up. Ramp geometry makes it a real
   multi-part gate rather than a grind: a leg's peak γ is capped at ~`d·a/2`,
-  so it takes **Redline Coils** (unreachable without them, and comfortable
-  around level 3), a ~200 ly leg, rugged freight to use the thrust, and a tank
-  or drive upgrade to afford the Δv. Out in the halo the coils finally have
-  road enough to run.
+  so it takes **Redline Coils level 3** (the pace governor sits below redline
+  until then), a ~200 ly leg, rugged freight to use the thrust, and a tank or
+  drive upgrade to afford the Δv. Out in the halo the coils finally have road
+  enough to run — though the governor caps sustained pace (βγ, the ly you eat
+  per ship-year), so thousand-ly hauls always cost real years of your life.
 - **Title screen**: continue, new career, today's shared **daily run**
   (date-seeded), and a how-to-play primer. All-time records (best balance,
   most deliveries, highest γ) persist across careers.
