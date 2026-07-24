@@ -28,9 +28,13 @@ float load_factor(void) { return 0.85f * (1.0f - g.upgrades[UP_DAMPER] * 0.15f);
 // drive response scaled by coil level, which is what makes redline speeds
 // reachable inside the small core cluster. Here runway is (γ−1)/a, so thrust
 // is the only lever on how much of a leg a burn eats — without this, coils are
-// dead weight anywhere but the deep halo. Roughly x1.4 per level.
+// dead weight anywhere but the deep halo.
+// The 5g stock drive is a career-pacing dial: early runs cost ~2.9 ship-yr
+// (vs 2.2 at 7g), so maxing out consumes real career. Two entries are
+// anchored and must not move casually: L3=20 (the γ2000 license geometry —
+// re-run the seed sim if changed) and L6=55 (min_pax_aging's floor build).
 float ship_thrust_g(void) {
-  static const float THRUST_G[7] = { 7, 10, 14, 20, 28, 39, 55 };
+  static const float THRUST_G[7] = { 5, 8, 12, 20, 28, 39, 55 };
   int lv = g.upgrades[UP_OVERDRIVE];
   return THRUST_G[lv > 6 ? 6 : lv];
 }
@@ -99,6 +103,31 @@ static double phi_geometry_max(double d, double a, double phi_end) {
   double m = (d * a + 1.0 + 0.5 * (ee + 1.0 / ee)) / 2.0;
   if (m < 1.0) m = 1.0;
   return lh_ln(m + lh_sqrt(m * m - 1.0));   // arcosh
+}
+
+// The physical floor on a passenger aging cap: the least ship time ANY build
+// could fly the leg in — best dampers (L3), best coils (55g thrust, pace
+// 4200), hot-dock — found by scanning the unimodal T(φ). The web's contract
+// caps assume its ramp discount; under honest ramps a 3–4g human simply
+// cannot cross 2000 ly in under ~3 ship-years, so without this clamp ~10% of
+// deep passenger offers are secretly unwinnable at max build. The Guild
+// knows Einstein: it never asks for the impossible, only the barely possible.
+float min_pax_aging(float d, int g_limit) {
+  double a = (double)g_limit / 0.4675;         // through maxed dampers
+  if (a > 55.0) a = 55.0;                      // maxed coil thrust
+  a *= G_ACCEL;
+  double phi_hi = lh_ln(4200.0 + lh_sqrt(4200.0 * 4200.0 + 1.0));  // maxed pace
+  double geo = phi_geometry_max(d, a, PHI_DOCK);
+  if (phi_hi > geo) phi_hi = geo;
+  Prof pr;
+  double best = 1e18;
+  for (int i = 1; i <= 48; i++) {
+    double phi = phi_hi * i / 48;
+    if (phi <= PHI_DOCK + 1e-3) continue;
+    if (!eval_profile(phi, a, PHI_DOCK, d, &pr)) break;
+    if (pr.t_ship < best) best = pr.t_ship;
+  }
+  return best > 1e17 ? d : (float)best;
 }
 
 // The speed ladder: fixed cruise rungs the player cycles on the contract card.

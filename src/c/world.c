@@ -252,6 +252,9 @@ static void make_offer(int from, int t, Contract *c) {
     else fill_names(c->what, WHAT_LEN, pick(PAX, LEN(PAX)));
     c->deadline = d / 0.7f + 50;
     c->max_aging = (float)max_aging;
+    // never demand what Einstein forbids: floor at 110% of the best possible
+    float floor_yr = 1.10f * min_pax_aging(d, g_limit);
+    if (c->max_aging < floor_yr) c->max_aging = floor_yr;
     c->pay = (int32_t)((400 + d * 0.55) * (1 + (g_limit < 8 ? (8 - g_limit) * 0.06 : 0)) + 0.5);
     return;
   }
@@ -263,6 +266,10 @@ static void make_offer(int from, int t, Contract *c) {
   fill_names(c->what, WHAT_LEN, pick(PAX, LEN(PAX)));
   c->deadline = d / 0.7f + 10;
   c->max_aging = (float)(d / g_req * 1.25 + 1.5);
+  {
+    float floor_yr = 1.10f * min_pax_aging(d, g_limit);
+    if (c->max_aging < floor_yr) c->max_aging = floor_yr;
+  }
   c->pay = (int32_t)((160 + d * (0.7 + g_req * 0.2)) * (1 + (g_limit < 8 ? (8 - g_limit) * 0.06 : 0)) + 0.5);
 }
 

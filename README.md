@@ -22,7 +22,7 @@ with the web game's worldgen — the same seed names the same stations).
   age you'll be on arrival. Select accepts and flies.
 - **The run**: a burn→cruise→brake profile at the hardest proper acceleration
   the load's g-rating (through your dampers) tolerates — capped again by what
-  the drive can actually give (7g stock, up to 55g with Redline Coils) —
+  the drive can actually give (5g stock, up to 55g with Redline Coils) —
   honest relativistic kinematics, closed-form in rapidity.
   Gentle ramps cost years on both clocks, so fragile freight is where your
   career actually goes. Replayed as a short animation of the two clocks
