@@ -9,5 +9,6 @@ Pick contracts off the star chart, then pick your cruise plan - AUTO, a fixed sp
 * Dock economy booms, strikes, and clearances
 * Reputation, ranks, and all-time records across careers
 * A deep-space license for pilots who hit redline - gamma 2,000 - on a long haul
+* Vibration on or off, from an Options screen on the title menu (and always silent in Quiet Time)
 
 The dilation is real physics - exact time dilation, honest rocketry in rapidity. The twin paradox as a contract clause.
