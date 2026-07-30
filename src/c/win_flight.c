@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "opts.h"
 
 // The run itself — resolved instantly, replayed as a short animation: a dot
 // crossing the route while the two clocks tick at their true relative rates.
@@ -86,7 +87,7 @@ static void tick(void *data) {
   s_elapsed += TICK_MS;
   if (s_elapsed >= DURATION_MS + 500) {   // hold the final frame a beat
     s_timer = NULL;
-    vibes_double_pulse();
+    if (opts_may_vibe()) vibes_double_pulse();
     win_results_push();
     return;
   }

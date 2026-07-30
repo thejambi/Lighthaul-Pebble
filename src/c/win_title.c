@@ -8,8 +8,9 @@ static Layer *s_layer;
 static int s_sel;
 static int s_confirm;    // row index awaiting a confirming second Select, or -1
 
-#define N_ROWS 4
-static const char *ROWS[N_ROWS] = { "CONTINUE", "NEW CAREER", "DAILY RUN", "HOW TO PLAY" };
+#define N_ROWS 5
+static const char *ROWS[N_ROWS] = { "CONTINUE", "NEW CAREER", "DAILY RUN",
+                                    "OPTIONS", "HOW TO PLAY" };
 
 static void draw(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
@@ -31,7 +32,7 @@ static void draw(Layer *layer, GContext *ctx) {
                        GTextAlignmentCenter, NULL);
   }
 
-  int row_h = compact ? 24 : 30;
+  int row_h = compact ? 20 : 24;      // five rows, not four
   int bx = round ? 32 : 10;
   int y = round ? (compact ? 42 : 74) : (compact ? 34 : 58);
   for (int i = 0; i < N_ROWS; i++) {
@@ -44,9 +45,11 @@ static void draw(Layer *layer, GContext *ctx) {
     } else {
       graphics_context_set_text_color(ctx, GColorWhite);
     }
-    graphics_draw_text(ctx, label, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
-                       GRect(bx, y - 3, b.size.w - 2 * bx, 24), GTextOverflowModeTrailingEllipsis,
-                       GTextAlignmentCenter, NULL);
+    graphics_draw_text(ctx, label,
+                       fonts_get_system_font(compact ? FONT_KEY_GOTHIC_14_BOLD
+                                                     : FONT_KEY_GOTHIC_18_BOLD),
+                       GRect(bx, y - (compact ? 1 : 3), b.size.w - 2 * bx, 24),
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
     y += row_h;
   }
 
@@ -105,7 +108,8 @@ static void click_sel(ClickRecognizerRef r, void *ctx) {
       if (s_confirm == 2) start_career(ds);
       else { s_confirm = 2; layer_mark_dirty(s_layer); }
       break;
-    case 3: win_about_push(); break;
+    case 3: win_options_push(); break;
+    case 4: win_about_push(); break;
   }
 }
 

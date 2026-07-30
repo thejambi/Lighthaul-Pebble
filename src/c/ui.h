@@ -31,3 +31,4 @@ void win_contract_push(int offer_idx);
 void win_flight_push(int offer_idx);
 void win_results_push(void);
 void win_outfit_push(void);
+void win_options_push(void);

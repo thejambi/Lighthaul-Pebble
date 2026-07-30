@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "opts.h"
 
 // Fuel & outfitting — a MenuLayer over the dock's fuel pump and its two-item
 // upgrade shop. Bulk fuel discount and dock-event pricing both apply.
@@ -84,7 +85,7 @@ static void select_row(MenuLayer *m, MenuIndex *idx, void *data) {
   } else {
     bought = buy_upgrade(g_stations[g.station].shop[idx->row]);
   }
-  if (bought) vibes_short_pulse();
+  if (bought && opts_may_vibe()) vibes_short_pulse();
   menu_layer_reload_data(s_menu);
 }
 
