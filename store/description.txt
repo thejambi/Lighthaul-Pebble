@@ -10,5 +10,6 @@ Pick contracts off the star chart, then pick your cruise plan - AUTO, a fixed sp
 * Reputation, ranks, and all-time records across careers
 * A deep-space license for pilots who hit redline - gamma 2,000 - on a long haul
 * Vibration on or off, from an Options screen on the title menu (and always silent in Quiet Time)
+* Touchscreen play on Pebble Time 2: tap an offer on the chart to pick it, tap your own dock for fuel and outfitting, swipe to walk any list - and every button still does what it always did
 
 The dilation is real physics - exact time dilation, honest rocketry in rapidity. The twin paradox as a contract clause.
