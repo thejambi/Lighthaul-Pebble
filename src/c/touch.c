@@ -1,6 +1,6 @@
 #include "touch.h"
 
-#if defined(PBL_TOUCH)
+#if PBL_API_EXISTS(touch_service_subscribe)
 
 #define TAP_SLOP   14      // px between landing and liftoff still read as a tap
 #define SWIPE_MIN  26      // px of travel before a drag counts as a swipe
@@ -46,8 +46,13 @@ static void begin(TouchTapHandler tap, TouchSwipeHandler swipe) {
   s_on_tap = tap;
   s_on_swipe = swipe;
   s_tracking = false;
-  // Ask before enabling it: the sensor draws current the whole time it's
-  // subscribed, and the wearer may have turned touch off system-wide.
+  // The runtime check decides, not the platform define. PBL_TOUCH is
+  // declared for emery and gabbro only, but flint carries the same
+  // functions, and whether that hardware has a screen to touch is not
+  // something this file should assert — touch_service_is_enabled() knows,
+  // and answers false for absent hardware and for a wearer who switched it
+  // off. Compiling it in everywhere the API exists costs a few dead bytes
+  // on a watch without a panel; guessing wrong costs the feature entirely.
   if (s_subscribed || !touch_service_is_enabled()) return;
   touch_service_subscribe(on_touch, NULL);
   s_subscribed = true;

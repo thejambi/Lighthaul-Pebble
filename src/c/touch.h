@@ -1,12 +1,12 @@
 #pragma once
 #include <pebble.h>
 
-// Touch, on the hardware that has it. The SDK's platform config declares
-// PBL_TOUCH for emery and gabbro only — flint exposes the touch functions in
-// its headers but has no touchscreen, so the header's presence is not the
-// test to use. Everything here compiles to nothing where PBL_TOUCH is absent,
-// and every button keeps doing exactly what it did: touch is only ever a
-// second way in, never the only one.
+// Touch, on the hardware that has it — which the watch is asked at runtime
+// rather than assumed here. The code compiles wherever the API exists and
+// then subscribes only if touch_service_is_enabled() agrees, so a panel the
+// platform config doesn't know about still works, and a watch without one
+// simply never subscribes. Every button keeps doing exactly what it did:
+// touch is only ever a second way in, never the only one.
 //
 // (Watchfaces need not apply — the platform doesn't deliver touch to them.)
 //
