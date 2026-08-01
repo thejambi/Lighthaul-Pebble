@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "touch.h"
 
 // Docked star map: top-down cluster chart. Up/Down cycles the three contract
 // offers (gold route) plus a FUEL & OUTFITTING slot; Select opens it.
@@ -62,15 +63,25 @@ static GPoint proj_of(const Proj *p, int idx) {
   return GPoint(p->mx + (int)(dx * t), p->my + (int)(dz * t));
 }
 
+static void click_sel(ClickRecognizerRef r, void *ctx);
+
+// The chrome heights in one place: draw() lays the map out with them and a
+// tap has to agree about where the map ends and the panel begins.
+static void map_chrome(GRect b, int *top_h, int *bot_h, int *inset) {
+  bool round = IS_ROUND, compact = IS_COMPACT(b);
+  *top_h = round ? (compact ? 46 : 56) : (compact ? 34 : 38);
+  *bot_h = round ? (compact ? 58 : 66) : (compact ? 54 : 62);
+  *inset = round ? 24 : 0;
+}
+
 static void draw(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx, b, 0, GCornerNone);
 
   bool round = IS_ROUND, compact = IS_COMPACT(b);
-  int top_h = round ? (compact ? 46 : 56) : (compact ? 34 : 38);
-  int bot_h = round ? (compact ? 58 : 66) : (compact ? 54 : 62);
-  int inset = round ? 24 : 0;
+  int top_h, bot_h, inset;
+  map_chrome(b, &top_h, &bot_h, &inset);
   GRect map_area = GRect(inset, top_h, b.size.w - 2 * inset, b.size.h - top_h - bot_h);
   Proj pj = make_proj(map_area);
 
@@ -204,6 +215,38 @@ static void draw(Layer *layer, GContext *ctx) {
   }
 }
 
+// Tapping the map picks what's under the finger: one of the three offer
+// destinations, or your own dock, which stands for the fuel and outfitting
+// waiting at it — that's where the outfitter is, so that's where you reach
+// for it. Tapping what's already picked opens it, as does the panel below,
+// so nothing commits on a single stray touch.
+#define TOUCH_REACH 16
+
+static void on_tap(GPoint p) {
+  if (!s_layer) return;
+  GRect b = layer_get_bounds(s_layer);
+  int top_h, bot_h, inset;
+  map_chrome(b, &top_h, &bot_h, &inset);
+
+  if (p.y >= b.size.h - bot_h) { click_sel(NULL, NULL); return; }   // the panel
+
+  GRect map_area = GRect(inset, top_h, b.size.w - 2 * inset,
+                         b.size.h - top_h - bot_h);
+  Proj pj = make_proj(map_area);
+
+  int best = -1, best_d2 = TOUCH_REACH * TOUCH_REACH;   // -1 none, 3 = outfitting
+  for (int o = 0; o < 4; o++) {
+    int idx = (o < 3) ? g_offers[o].to : (int)g.station;
+    GPoint q = proj_of(&pj, idx);
+    int dx = q.x - p.x, dy = q.y - p.y;
+    int d2 = dx * dx + dy * dy;
+    if (d2 <= best_d2) { best_d2 = d2; best = o; }
+  }
+  if (best < 0) return;                    // empty space: leave the pick alone
+  if (best == s_sel) click_sel(NULL, NULL);
+  else { s_sel = best; layer_mark_dirty(s_layer); }
+}
+
 static void click_up(ClickRecognizerRef r, void *ctx)   { s_sel = (s_sel + 3) % 4; layer_mark_dirty(s_layer); }
 static void click_down(ClickRecognizerRef r, void *ctx) { s_sel = (s_sel + 1) % 4; layer_mark_dirty(s_layer); }
 static void click_sel(ClickRecognizerRef r, void *ctx) {
@@ -225,7 +268,11 @@ static void win_load(Window *w) {
 }
 
 static void win_unload(Window *w) { layer_destroy(s_layer); s_layer = NULL; }
-static void win_appear(Window *w) { if (s_layer) layer_mark_dirty(s_layer); }
+static void win_disappear(Window *w) { touch_end(); }
+static void win_appear(Window *w) {
+  touch_begin(on_tap);
+  if (s_layer) layer_mark_dirty(s_layer);
+}
 
 void win_map_refresh(void) {
   s_sel = 0;
@@ -237,7 +284,8 @@ void win_map_push(void) {
     s_win = window_create();
     window_set_background_color(s_win, GColorBlack);
     window_set_window_handlers(s_win, (WindowHandlers){
-      .load = win_load, .unload = win_unload, .appear = win_appear });
+      .load = win_load, .unload = win_unload, .appear = win_appear,
+      .disappear = win_disappear });
     window_set_click_config_provider(s_win, click_config);
   }
   window_stack_push(s_win, true);

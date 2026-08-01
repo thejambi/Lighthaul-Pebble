@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "touch.h"
 
 // Contract detail card: the deal on top, the auto-computed flight plan below.
 // Select accepts and flies; Back passes.
@@ -115,6 +116,15 @@ static void click_sel(ClickRecognizerRef r, void *ctx) {
   win_flight_push(s_idx);
 }
 
+// Only the footer answers a tap. The rest is the brief you're reading, and
+// flying a run is not a thing to start with a resting thumb.
+static void on_tap(GPoint p) {
+  if (!s_layer) return;
+  GRect b = layer_get_bounds(s_layer);
+  int band = IS_ROUND ? 44 : 28;
+  if (p.y >= b.size.h - band) click_sel(NULL, NULL);
+}
+
 static void click_rung(int d) {
   g.plan_rung = (uint8_t)((g.plan_rung + N_PLAN_RUNGS + d) % N_PLAN_RUNGS);
   layer_mark_dirty(s_layer);
@@ -136,13 +146,17 @@ static void win_load(Window *w) {
 }
 
 static void win_unload(Window *w) { layer_destroy(s_layer); s_layer = NULL; }
+static void win_appear(Window *w) { touch_begin(on_tap); }
+static void win_disappear(Window *w) { touch_end(); }
 
 void win_contract_push(int offer_idx) {
   s_idx = offer_idx;
   if (!s_win) {
     s_win = window_create();
     window_set_background_color(s_win, GColorBlack);
-    window_set_window_handlers(s_win, (WindowHandlers){ .load = win_load, .unload = win_unload });
+    window_set_window_handlers(s_win, (WindowHandlers){
+      .load = win_load, .unload = win_unload,
+      .appear = win_appear, .disappear = win_disappear });
     window_set_click_config_provider(s_win, click_config);
   }
   window_stack_push(s_win, true);

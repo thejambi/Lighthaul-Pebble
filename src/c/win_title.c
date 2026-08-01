@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "touch.h"
 
 // Title screen: continue / new career / daily run / how to play, with the
 // all-time records and the current map seed along the bottom.
@@ -11,6 +12,14 @@ static int s_confirm;    // row index awaiting a confirming second Select, or -1
 #define N_ROWS 5
 static const char *ROWS[N_ROWS] = { "CONTINUE", "NEW CAREER", "DAILY RUN",
                                     "OPTIONS", "HOW TO PLAY" };
+
+// One source of truth for the row positions, shared with the hit-test.
+static void row_geom(GRect b, int *y0, int *row_h, int *bx) {
+  bool round = IS_ROUND, compact = IS_COMPACT(b);
+  *row_h = compact ? 20 : 24;        // five rows, not four
+  *bx = round ? 32 : 10;
+  *y0 = round ? (compact ? 42 : 74) : (compact ? 34 : 58);
+}
 
 static void draw(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
@@ -32,9 +41,8 @@ static void draw(Layer *layer, GContext *ctx) {
                        GTextAlignmentCenter, NULL);
   }
 
-  int row_h = compact ? 20 : 24;      // five rows, not four
-  int bx = round ? 32 : 10;
-  int y = round ? (compact ? 42 : 74) : (compact ? 34 : 58);
+  int row_h, bx, y;
+  row_geom(b, &y, &row_h, &bx);
   for (int i = 0; i < N_ROWS; i++) {
     const char *label = ROWS[i];
     if (s_confirm == i) label = "SURE? SELECT = YES";
@@ -113,6 +121,24 @@ static void click_sel(ClickRecognizerRef r, void *ctx) {
   }
 }
 
+// Tapping a row means it, the way Select on it does. Landing on a row that
+// wasn't picked moves the pick there first and drops any pending "sure?", so
+// a stray touch can never confirm a question asked about a different row —
+// and two of these rows end a career.
+static void on_tap(GPoint p) {
+  if (!s_layer) return;
+  GRect b = layer_get_bounds(s_layer);
+  int row_h, bx, y;
+  row_geom(b, &y, &row_h, &bx);
+  for (int i = 0; i < N_ROWS; i++, y += row_h) {
+    if (p.y < y || p.y >= y + row_h) continue;
+    if (p.x < bx || p.x >= b.size.w - bx) return;
+    if (i != s_sel) { s_sel = i; s_confirm = -1; }
+    click_sel(NULL, NULL);
+    return;
+  }
+}
+
 static void move(int d) {
   s_sel = (s_sel + d + N_ROWS) % N_ROWS;
   s_confirm = -1;
@@ -135,8 +161,10 @@ static void win_load(Window *w) {
 }
 
 static void win_unload(Window *w) { layer_destroy(s_layer); s_layer = NULL; }
+static void win_disappear(Window *w) { touch_end(); }
 static void win_appear(Window *w) {
   s_confirm = -1;
+  touch_begin(on_tap);
   if (s_layer) layer_mark_dirty(s_layer);
 }
 
@@ -145,7 +173,8 @@ void win_title_push(void) {
     s_win = window_create();
     window_set_background_color(s_win, GColorBlack);
     window_set_window_handlers(s_win, (WindowHandlers){
-      .load = win_load, .unload = win_unload, .appear = win_appear });
+      .load = win_load, .unload = win_unload, .appear = win_appear,
+      .disappear = win_disappear });
     window_set_click_config_provider(s_win, click_config);
   }
   window_stack_push(s_win, true);
