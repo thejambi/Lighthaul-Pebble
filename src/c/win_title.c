@@ -144,6 +144,7 @@ static void move(int d) {
   s_confirm = -1;
   layer_mark_dirty(s_layer);
 }
+static void on_swipe(int d) { move(d); }
 static void click_up(ClickRecognizerRef r, void *ctx)   { move(-1); }
 static void click_down(ClickRecognizerRef r, void *ctx) { move(1); }
 
@@ -164,7 +165,7 @@ static void win_unload(Window *w) { layer_destroy(s_layer); s_layer = NULL; }
 static void win_disappear(Window *w) { touch_end(); }
 static void win_appear(Window *w) {
   s_confirm = -1;
-  touch_begin(on_tap);
+  touch_begin_full(on_tap, on_swipe);
   if (s_layer) layer_mark_dirty(s_layer);
 }
 

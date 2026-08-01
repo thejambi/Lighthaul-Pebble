@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "touch.h"
 #include "opts.h"
 
 // Fuel & outfitting — a MenuLayer over the dock's fuel pump and its two-item
@@ -89,6 +90,30 @@ static void select_row(MenuLayer *m, MenuIndex *idx, void *data) {
   menu_layer_reload_data(s_menu);
 }
 
+// A MenuLayer owns its own row layout, and the SDK exposes no "row at this
+// point" call — so rather than reimplement its arithmetic and drift from it,
+// touch drives the menu through the API it already has. A swipe steps the
+// selection; a tap in the lower half steps down, the upper half steps up,
+// and a tap near the middle takes the highlighted row. Buttons are unchanged.
+static void menu_step(int d) {
+  if (!s_menu) return;
+  menu_layer_set_selected_next(s_menu, d < 0, MenuRowAlignCenter, true);
+}
+
+static void on_swipe(int d) { menu_step(d); }
+
+static void on_tap(GPoint p) {
+  if (!s_menu) return;
+  GRect b = layer_get_bounds(menu_layer_get_layer(s_menu));
+  int third = b.size.h / 3;
+  if (p.y < third) menu_step(-1);
+  else if (p.y >= b.size.h - third) menu_step(1);
+  else {
+    MenuIndex i = menu_layer_get_selected_index(s_menu);
+    select_row(s_menu, &i, NULL);
+  }
+}
+
 static void win_load(Window *w) {
   Layer *root = window_get_root_layer(w);
   GRect b = layer_get_bounds(root);
@@ -108,11 +133,15 @@ static void win_load(Window *w) {
 }
 
 static void win_unload(Window *w) { menu_layer_destroy(s_menu); s_menu = NULL; }
+static void win_appear(Window *w) { touch_begin_full(on_tap, on_swipe); }
+static void win_disappear(Window *w) { touch_end(); }
 
 void win_outfit_push(void) {
   if (!s_win) {
     s_win = window_create();
-    window_set_window_handlers(s_win, (WindowHandlers){ .load = win_load, .unload = win_unload });
+    window_set_window_handlers(s_win, (WindowHandlers){
+      .load = win_load, .unload = win_unload,
+      .appear = win_appear, .disappear = win_disappear });
   }
   window_stack_push(s_win, true);
 }

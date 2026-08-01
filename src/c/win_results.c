@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "touch.h"
 
 // Delivery results — and, when the clock runs out, the career epilogue.
 
@@ -115,6 +116,14 @@ static void click_sel(ClickRecognizerRef r, void *ctx) {
   win_map_refresh();
 }
 
+// The bottom of the screen advances the card — the one place a thumb rests
+// naturally when you've finished reading. Back stays disabled either way.
+static void on_tap(GPoint p) {
+  if (!s_layer) return;
+  GRect b = layer_get_bounds(s_layer);
+  if (p.y >= b.size.h * 2 / 3) click_sel(NULL, NULL);
+}
+
 static void click_noop(ClickRecognizerRef r, void *ctx) {}
 static void click_config(void *ctx) {
   window_single_click_subscribe(BUTTON_ID_SELECT, click_sel);
@@ -129,13 +138,17 @@ static void win_load(Window *w) {
 }
 
 static void win_unload(Window *w) { layer_destroy(s_layer); s_layer = NULL; }
+static void win_appear(Window *w) { touch_begin(on_tap); }
+static void win_disappear(Window *w) { touch_end(); }
 
 void win_results_push(void) {
   s_page = 0;
   if (!s_win) {
     s_win = window_create();
     window_set_background_color(s_win, GColorBlack);
-    window_set_window_handlers(s_win, (WindowHandlers){ .load = win_load, .unload = win_unload });
+    window_set_window_handlers(s_win, (WindowHandlers){
+      .load = win_load, .unload = win_unload,
+      .appear = win_appear, .disappear = win_disappear });
     window_set_click_config_provider(s_win, click_config);
   }
   window_stack_push(s_win, true);

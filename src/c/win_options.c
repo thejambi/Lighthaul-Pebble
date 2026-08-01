@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "opts.h"
+#include "touch.h"
 
 // Options. UP/DOWN pick a row, SELECT changes it, BACK returns — every change
 // is persisted as it's made, so there's no save step to forget. The rows are a
@@ -34,6 +35,14 @@ static uint8_t row_val(const OptRow *r) {
   return v < r->n ? v : 0;
 }
 
+// One source of truth for the row positions, shared with the hit-test.
+static void row_geom(GRect b, int *y0, int *row_h, int *bx) {
+  bool round = IS_ROUND, compact = IS_COMPACT(b);
+  *row_h = compact ? 24 : 30;
+  *bx = round ? 26 : 8;
+  *y0 = round ? (compact ? 44 : 78) : (compact ? 36 : 58);
+}
+
 static void draw(Layer *layer, GContext *ctx) {
   GRect b = layer_get_bounds(layer);
   graphics_context_set_fill_color(ctx, GColorBlack);
@@ -47,10 +56,9 @@ static void draw(Layer *layer, GContext *ctx) {
                      GRect(0, round ? (compact ? 10 : 20) : 2, b.size.w, 32),
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  int row_h = compact ? 24 : 30;
-  int bx = round ? 26 : 8;
+  int row_h, bx, y;
+  row_geom(b, &y, &row_h, &bx);
   int rw = b.size.w - 2 * bx;
-  int y = round ? (compact ? 44 : 78) : (compact ? 36 : 58);
   GFont lf = fonts_get_system_font(compact ? FONT_KEY_GOTHIC_14_BOLD
                                            : FONT_KEY_GOTHIC_18_BOLD);
   GFont f14 = fonts_get_system_font(FONT_KEY_GOTHIC_14);
@@ -97,10 +105,26 @@ static void click_sel(ClickRecognizerRef r, void *ctx) {
   layer_mark_dirty(s_layer);
 }
 
+// A tap changes the row it lands on; a swipe walks between them.
+static void on_tap(GPoint p) {
+  if (!s_layer) return;
+  GRect b = layer_get_bounds(s_layer);
+  int row_h, bx, y;
+  row_geom(b, &y, &row_h, &bx);
+  for (int i = 0; i < N_ROWS; i++, y += row_h) {
+    if (p.y < y || p.y >= y + row_h) continue;
+    if (p.x < bx || p.x >= b.size.w - bx) return;
+    if (i != s_sel) s_sel = i;
+    click_sel(NULL, NULL);
+    return;
+  }
+}
+
 static void move(int d) {
   s_sel = (s_sel + d + N_ROWS) % N_ROWS;
   layer_mark_dirty(s_layer);
 }
+static void on_swipe(int d) { move(d); }
 static void click_up(ClickRecognizerRef r, void *ctx)   { move(-1); }
 static void click_down(ClickRecognizerRef r, void *ctx) { move(1); }
 
@@ -118,13 +142,16 @@ static void win_load(Window *w) {
 }
 
 static void win_unload(Window *w) { layer_destroy(s_layer); s_layer = NULL; }
+static void win_appear(Window *w) { touch_begin_full(on_tap, on_swipe); }
+static void win_disappear(Window *w) { touch_end(); }
 
 void win_options_push(void) {
   if (!s_win) {
     s_win = window_create();
     window_set_background_color(s_win, GColorBlack);
     window_set_window_handlers(s_win, (WindowHandlers){
-      .load = win_load, .unload = win_unload });
+      .load = win_load, .unload = win_unload,
+      .appear = win_appear, .disappear = win_disappear });
     window_set_click_config_provider(s_win, click_config);
   }
   s_sel = 0;

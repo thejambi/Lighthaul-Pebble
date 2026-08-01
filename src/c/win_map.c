@@ -247,6 +247,7 @@ static void on_tap(GPoint p) {
   else { s_sel = best; layer_mark_dirty(s_layer); }
 }
 
+static void on_swipe(int d) { s_sel = (s_sel + 4 + d) % 4; layer_mark_dirty(s_layer); }
 static void click_up(ClickRecognizerRef r, void *ctx)   { s_sel = (s_sel + 3) % 4; layer_mark_dirty(s_layer); }
 static void click_down(ClickRecognizerRef r, void *ctx) { s_sel = (s_sel + 1) % 4; layer_mark_dirty(s_layer); }
 static void click_sel(ClickRecognizerRef r, void *ctx) {
@@ -270,7 +271,7 @@ static void win_load(Window *w) {
 static void win_unload(Window *w) { layer_destroy(s_layer); s_layer = NULL; }
 static void win_disappear(Window *w) { touch_end(); }
 static void win_appear(Window *w) {
-  touch_begin(on_tap);
+  touch_begin_full(on_tap, on_swipe);
   if (s_layer) layer_mark_dirty(s_layer);
 }
 
